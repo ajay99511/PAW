@@ -37,3 +37,13 @@ class MemorySearchResult(BaseModel):
     memory_type: str
     score: float
     metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class Mem0Memory(BaseModel):
+    """A Mem0 memory entry for API responses."""
+    id: str
+    memory: str
+    user_id: str = "default"
+    categories: list[str] = Field(default_factory=list)
+    created_at: str | None = None
+    score: float | None = None

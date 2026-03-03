@@ -45,6 +45,13 @@ class Settings(BaseSettings):
         default="personal_memories", alias="QDRANT_COLLECTION"
     )
 
+    # --- Mem0 ---
+    mem0_collection: str = Field(
+        default="mem0_memories",
+        alias="MEM0_COLLECTION",
+        description="Qdrant collection name for Mem0 memories",
+    )
+
     # --- Embedding ---
     embedding_model: str = Field(
         default="nomic-embed-text",

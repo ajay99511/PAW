@@ -1,1 +1,2 @@
-# Tools - OS tools, file operations, project scanning
+# PersonalAssist Tools Package
+# Provides: parsers, chunker, ingest orchestrator
