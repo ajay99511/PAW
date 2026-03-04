@@ -52,6 +52,13 @@ class Settings(BaseSettings):
         description="Qdrant collection name for Mem0 memories",
     )
 
+    # --- Learning Loop ---
+    consolidation_threshold: int = Field(
+        default=20,
+        alias="CONSOLIDATION_THRESHOLD",
+        description="Auto-consolidate memories every N conversation turns",
+    )
+
     # --- Embedding ---
     embedding_model: str = Field(
         default="nomic-embed-text",
@@ -70,13 +77,30 @@ class Settings(BaseSettings):
         extra = "ignore"
 
     def resolve_model(self, model_key: str) -> str:
-        """Resolve a short model key ('local', 'gemini', 'claude') to a LiteLLM model string."""
+        """
+        Resolve a model key to a LiteLLM model string.
+
+        Priority: short alias → runtime active model → raw model string.
+        """
+        # Short aliases always resolve explicitly
         model_map = {
             "local": self.default_local_model,
             "gemini": self.default_remote_model,
             "claude": "anthropic/claude-sonnet-4-20250514",
         }
-        return model_map.get(model_key, model_key)
+        if model_key in model_map:
+            return model_map[model_key]
+
+        # If "active" is passed, resolve from the registry
+        if model_key == "active":
+            try:
+                from packages.model_gateway.registry import get_active_model
+                return get_active_model()
+            except ImportError:
+                return self.default_local_model
+
+        # Otherwise treat as a raw LiteLLM model string
+        return model_key
 
 
 # Singleton instance — import this everywhere

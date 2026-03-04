@@ -30,3 +30,8 @@ storage/logs/
 # OS
 .DS_Store
 Thumbs.db
+
+# Tauri / Desktop App
+apps/desktop/src-tauri/target/
+apps/desktop/node_modules/
+apps/desktop/dist/

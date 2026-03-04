@@ -69,6 +69,10 @@ class ForgetRequest(BaseModel):
     memory_id: str
 
 
+class ModelSwitchRequest(BaseModel):
+    model: str
+
+
 # ── Health ───────────────────────────────────────────────────────────
 
 
@@ -151,6 +155,8 @@ async def chat_smart(req: ChatRequest):
     extraction_result = {}
     try:
         from packages.memory.memory_service import extract_and_store_from_turn
+        from packages.memory.consolidation import increment_turn, should_consolidate, consolidate_memories
+        
         turn_messages = [
             {"role": "user", "content": req.message},
             {"role": "assistant", "content": response},
@@ -158,6 +164,15 @@ async def chat_smart(req: ChatRequest):
         extraction_result = await extract_and_store_from_turn(
             turn_messages, user_id="default",
         )
+        
+        # Check if consolidation is needed
+        increment_turn(user_id="default")
+        if should_consolidate(user_id="default"):
+            logger.info("Turn threshold reached, triggering memory consolidation")
+            # Fire and forget consolidation
+            import asyncio
+            asyncio.create_task(consolidate_memories(user_id="default", model=req.model))
+            
     except Exception as exc:
         logger.warning("Auto-extraction failed (non-fatal): %s", exc)
 
@@ -248,6 +263,20 @@ async def memory_forget(req: ForgetRequest):
         raise HTTPException(status_code=500, detail=str(exc))
 
 
+@app.post("/memory/consolidate")
+async def memory_consolidate(user_id: str = "default"):
+    """
+    Manually trigger memory consolidation routing.
+    """
+    try:
+        from packages.memory.consolidation import consolidate_memories
+        result = await consolidate_memories(user_id=user_id, model="active")
+        return result
+    except Exception as exc:
+        logger.error("Consolidate error: %s", exc)
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
 # ── Ingestion Endpoints ──────────────────────────────────────────────
 
 
@@ -299,13 +328,78 @@ async def agents_run(req: ChatRequest):
     """Run a simple planner agent (placeholder for CrewAI)."""
     try:
         from packages.agents.base_agent import PlannerAgent
-        agent = PlannerAgent()
-        result = await agent.run(context="", message=req.message)
-        return {"response": result, "agent": "planner"}
+        from packages.agents.crew import run_crew
+        
+        # We will dispatch to the new lightweight crew orchestration.
+        result = await run_crew(
+            user_message=req.message,
+            user_id="default",
+            model=req.model,
+        )
+        return result
     except Exception as exc:
         logger.error("Agent run error: %s", exc)
         raise HTTPException(status_code=500, detail=str(exc))
 
+@app.get("/agents/trace/{run_id}")
+async def agents_trace_stream(run_id: str):
+    """SSE streaming endpoint for agent traces."""
+    from packages.agents.trace import trace_manager
+    if not trace_manager.has_run(run_id):
+        raise HTTPException(status_code=404, detail="Run ID not found or already finished")
+        
+    async def generate():
+        try:
+            async for event in trace_manager.stream(run_id):
+                yield f"data: {event.model_dump_json()}\n\n"
+        except Exception as exc:
+            logger.error("Trace stream error: %s", exc)
+            yield f"data: {json.dumps({'error': str(exc)})}\n\n"
+            
+    return StreamingResponse(generate(), media_type="text/event-stream")
+
+
+# ── Model Endpoints ──────────────────────────────────────────────────
+
+@app.get("/models")
+async def list_models():
+    """List all available models (local Ollama + remote)."""
+    try:
+        from packages.model_gateway.registry import get_all_models
+        models = await get_all_models()
+        return {"models": [m.model_dump() for m in models]}
+    except Exception as exc:
+        logger.error("List models error: %s", exc)
+        raise HTTPException(status_code=500, detail=str(exc))
+
+@app.get("/models/active")
+async def get_active_model_endpoint():
+    """Get the currently active model."""
+    from packages.model_gateway.registry import get_active_model, get_model_by_id
+    active_id = get_active_model()
+    model = await get_model_by_id(active_id)
+    return {"active_model": active_id, "model_info": model.model_dump() if model else None}
+
+@app.post("/models/switch")
+async def switch_model(req: ModelSwitchRequest):
+    """Set the system-wide active model."""
+    try:
+        from packages.model_gateway.registry import set_active_model, get_model_by_id
+        model = await get_model_by_id(req.model)
+        if not model:
+            raise HTTPException(status_code=404, detail=f"Model not found: {req.model}")
+        
+        active_id = set_active_model(req.model)
+        from packages.shared.config import settings
+        # Also persist to settings for fallback resolution
+        settings.default_local_model = active_id
+        
+        return {"status": "success", "active_model": active_id}
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.error("Switch model error: %s", exc)
+        raise HTTPException(status_code=500, detail=str(exc))
 
 # ── Static Test Pages ────────────────────────────────────────────────
 

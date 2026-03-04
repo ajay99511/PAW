@@ -1,0 +1,69 @@
+============================= test session starts =============================
+platform win32 -- Python 3.13.5, pytest-9.0.2, pluggy-1.6.0 -- C:\Agents\PersonalAssist\.venv\Scripts\python.exe
+cachedir: .pytest_cache
+rootdir: C:\Agents\PersonalAssist
+plugins: anyio-4.12.1, asyncio-1.3.0
+asyncio: mode=Mode.STRICT, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collecting ... collected 53 items
+
+tests/test_consolidation.py::TestTurnCounter::test_increment_starts_at_one PASSED [  1%]
+tests/test_consolidation.py::TestTurnCounter::test_increment_accumulates PASSED [  3%]
+tests/test_consolidation.py::TestTurnCounter::test_reset_clears_count PASSED [  5%]
+tests/test_consolidation.py::TestTurnCounter::test_separate_users_tracked_independently PASSED [  7%]
+tests/test_consolidation.py::TestShouldConsolidate::test_does_not_trigger_at_zero PASSED [  9%]
+tests/test_consolidation.py::TestShouldConsolidate::test_triggers_at_threshold PASSED [ 11%]
+tests/test_consolidation.py::TestShouldConsolidate::test_does_not_trigger_before_threshold PASSED [ 13%]
+tests/test_consolidation.py::TestShouldConsolidate::test_triggers_at_multiples_of_threshold PASSED [ 15%]
+tests/test_consolidation.py::TestShouldConsolidate::test_does_not_trigger_between_multiples PASSED [ 16%]
+tests/test_ingestion.py::TestDetectFileType::test_markdown PASSED        [ 18%]
+tests/test_ingestion.py::TestDetectFileType::test_python PASSED          [ 20%]
+tests/test_ingestion.py::TestDetectFileType::test_javascript PASSED      [ 22%]
+tests/test_ingestion.py::TestDetectFileType::test_json PASSED            [ 24%]
+tests/test_ingestion.py::TestDetectFileType::test_yaml PASSED            [ 26%]
+tests/test_ingestion.py::TestDetectFileType::test_unknown_defaults_to_text PASSED [ 28%]
+tests/test_ingestion.py::TestDetectFileType::test_pdf PASSED             [ 30%]
+tests/test_ingestion.py::TestParseMarkdown::test_basic_markdown PASSED   [ 32%]
+tests/test_ingestion.py::TestParseMarkdown::test_empty_markdown PASSED   [ 33%]
+tests/test_ingestion.py::TestParsePython::test_python_with_functions PASSED [ 35%]
+tests/test_ingestion.py::TestParsePython::test_python_with_async PASSED  [ 37%]
+tests/test_ingestion.py::TestParseJson::test_valid_json PASSED           [ 39%]
+tests/test_ingestion.py::TestParseJson::test_invalid_json_fallback PASSED [ 41%]
+tests/test_ingestion.py::TestParsePlainText::test_text_file PASSED       [ 43%]
+tests/test_ingestion.py::TestChunkRecursive::test_small_text_single_chunk PASSED [ 45%]
+tests/test_ingestion.py::TestChunkRecursive::test_large_text_multiple_chunks PASSED [ 47%]
+tests/test_ingestion.py::TestChunkRecursive::test_chunks_have_sequential_indices PASSED [ 49%]
+tests/test_ingestion.py::TestChunkCodeAware::test_python_functions_as_chunks PASSED [ 50%]
+tests/test_ingestion.py::TestChunkCodeAware::test_code_chunks_preserve_section_name PASSED [ 52%]
+tests/test_ingestion.py::TestChunkMarkdown::test_markdown_header_chunks PASSED [ 54%]
+tests/test_ingestion.py::TestAutoStrategy::test_python_uses_code PASSED  [ 56%]
+tests/test_ingestion.py::TestAutoStrategy::test_markdown_uses_markdown PASSED [ 58%]
+tests/test_ingestion.py::TestAutoStrategy::test_text_uses_recursive PASSED [ 60%]
+tests/test_models.py::TestStaticRemoteModels::test_returns_two_remote_models PASSED [ 62%]
+tests/test_models.py::TestStaticRemoteModels::test_includes_gemini PASSED [ 64%]
+tests/test_models.py::TestStaticRemoteModels::test_includes_anthropic PASSED [ 66%]
+tests/test_models.py::TestStaticRemoteModels::test_all_remote_models_are_not_local PASSED [ 67%]
+tests/test_models.py::TestActiveModel::test_defaults_to_config PASSED    [ 69%]
+tests/test_models.py::TestActiveModel::test_set_and_get PASSED           [ 71%]
+tests/test_models.py::TestActiveModel::test_static_models_reflect_active PASSED [ 73%]
+tests/test_models.py::TestResolveModelIntegration::test_resolve_local PASSED [ 75%]
+tests/test_models.py::TestResolveModelIntegration::test_resolve_gemini PASSED [ 77%]
+tests/test_models.py::TestResolveModelIntegration::test_resolve_active_uses_registry PASSED [ 79%]
+tests/test_models.py::TestResolveModelIntegration::test_resolve_passthrough PASSED [ 81%]
+tests/test_models.py::TestEmbeddingClassification::test_known_embedding_models PASSED [ 83%]
+tests/test_models.py::TestEmbeddingClassification::test_chat_models_not_classified_as_embedding PASSED [ 84%]
+tests/test_trace.py::TestTraceCollector::test_new_run_returns_id PASSED  [ 86%]
+tests/test_trace.py::TestTraceCollector::test_has_run PASSED             [ 88%]
+tests/test_trace.py::TestTraceCollector::test_emit_and_stream PASSED     [ 90%]
+tests/test_trace.py::TestTraceCollector::test_finish_ends_stream PASSED  [ 92%]
+tests/test_trace.py::TestTraceCollector::test_stream_nonexistent_run PASSED [ 94%]
+tests/test_trace.py::TestTraceEvent::test_creation PASSED                [ 96%]
+tests/test_trace.py::TestTraceEvent::test_metadata_default_empty PASSED  [ 98%]
+tests/test_trace.py::TestTraceEvent::test_serialization PASSED           [100%]
+
+============================== warnings summary ===============================
+packages\shared\config.py:15
+  C:\Agents\PersonalAssist\packages\shared\config.py:15: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+    class Settings(BaseSettings):
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+======================== 53 passed, 1 warning in 0.52s ========================
