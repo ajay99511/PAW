@@ -454,3 +454,75 @@ export async function toolCheckCommand(
   });
 }
 
+// ── Podcast ────────────────────────────────────────────────────────
+
+export interface PodcastRequest {
+  topic: string;
+  duration_minutes: number;
+  level: "beginner" | "intermediate" | "advanced";
+  model?: string;
+}
+
+export interface PodcastJob {
+  job_id: string;
+  topic: string;
+  status: string;
+  progress_pct: number;
+  output_path?: string;
+  error?: string;
+  created_at: string;
+  duration_minutes: number;
+  level: string;
+}
+
+export async function generatePodcast(
+  req: PodcastRequest
+): Promise<{ job_id: string; status_url: string }> {
+  return api("/api/podcast/generate", {
+    method: "POST",
+    body: JSON.stringify(req),
+  });
+}
+
+export async function getPodcastStatus(
+  jobId: string
+): Promise<PodcastJob> {
+  return api(`/api/podcast/status/${jobId}`);
+}
+
+export async function listPodcastJobs(): Promise<{ jobs: PodcastJob[]; count: number }> {
+  return api("/api/podcast/jobs");
+}
+
+export async function* streamPodcastProgress(
+  jobId: string
+): AsyncGenerator<PodcastJob, void, undefined> {
+  const res = await fetch(`${API_BASE}/api/podcast/status/${jobId}/stream`);
+  if (!res.ok) throw new Error(`Podcast stream error: ${res.status}`);
+  if (!res.body) throw new Error("No response body");
+
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split("\n");
+    buffer = lines.pop() || "";
+
+    for (const line of lines) {
+      if (line.startsWith("data: ")) {
+        const data = line.slice(6).trim();
+        try {
+          yield JSON.parse(data) as PodcastJob;
+        } catch {
+          // non-JSON line
+        }
+      }
+    }
+  }
+}
+

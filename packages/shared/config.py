@@ -66,6 +66,34 @@ class Settings(BaseSettings):
         description="Ollama embedding model for vector generation",
     )
 
+    # --- Podcast Agent ---
+    podcast_output_dir: str = Field(
+        default="~/Downloads",
+        alias="PODCAST_OUTPUT_DIR",
+        description="Directory to save generated podcast MP3 files",
+    )
+    tts_provider: str = Field(
+        default="edge-tts",
+        alias="TTS_PROVIDER",
+        description="TTS engine: 'edge-tts' (free) or 'elevenlabs' (premium)",
+    )
+    elevenlabs_api_key: str = Field(default="", alias="ELEVENLABS_API_KEY")
+    elevenlabs_voice_id: str = Field(
+        default="21m00Tcm4TlvDq8ikWAM",
+        alias="ELEVENLABS_VOICE_ID",
+        description="ElevenLabs voice ID (default: Rachel)",
+    )
+    podcast_qdrant_collection: str = Field(
+        default="podcast_research",
+        alias="PODCAST_QDRANT_COLLECTION",
+        description="Separate Qdrant collection for podcast research data",
+    )
+    podcast_max_duration: int = Field(
+        default=120,
+        alias="PODCAST_MAX_DURATION",
+        description="Hard cap on podcast duration in minutes",
+    )
+
     # --- Server ---
     api_host: str = Field(default="127.0.0.1", alias="API_HOST")
     api_port: int = Field(default=8000, alias="API_PORT")

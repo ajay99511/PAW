@@ -38,6 +38,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# ── Podcast Router (isolated sub-router) ─────────────────────────────
+from apps.api.podcast_router import podcast_router
+app.include_router(podcast_router)
+
 # ── Request / Response Models ────────────────────────────────────────
 
 

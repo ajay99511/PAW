@@ -29,3 +29,11 @@ pytest-asyncio>=0.24.0
 
 # === Agents / Memory ===
 ollama>=0.6.1
+
+# === Podcast Agent ===
+duckduckgo-search>=7.0.0
+edge-tts>=6.1.0
+beautifulsoup4>=4.12.0
+
+# === Podcast Agent (Optional - Premium TTS) ===
+# elevenlabs>=1.0.0
