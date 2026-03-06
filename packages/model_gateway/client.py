@@ -25,8 +25,6 @@ from packages.shared.config import settings
 logger = logging.getLogger(__name__)
 
 # ── Configuration ────────────────────────────────────────────────────
-# Tell LiteLLM where our local Ollama instance lives
-litellm.api_base = settings.ollama_api_base
 # Suppress litellm printing to stdout
 litellm.set_verbose = False
 
