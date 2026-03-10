@@ -16,8 +16,8 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import shlex
 import re
+import shlex
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -90,28 +90,68 @@ BLOCKED_PATTERNS = [
     r"reg\s+delete",                  # registry delete
 ]
 
+# Shell control operators that allow command chaining/injection.
+# We block these and allow only single-command execution.
+_SHELL_CONTROL_PATTERN = re.compile(r"[;&|`><]")
+
 
 # ── Safety ───────────────────────────────────────────────────────────
 
 
+def _contains_shell_controls(command: str) -> bool:
+    """Return True when command contains shell control operators."""
+    return bool(_SHELL_CONTROL_PATTERN.search(command))
+
+
+def _split_command(command: str) -> list[str]:
+    """Best-effort command splitter for allowlist checks."""
+    try:
+        return shlex.split(command, posix=False)
+    except Exception:
+        return command.strip().split()
+
+
 def _is_command_allowed(command: str) -> bool:
     """Check if a command is in the pre-approved allowlist."""
-    cmd_lower = command.strip().lower()
+    cmd = command.strip()
+    if not cmd or _contains_shell_controls(cmd):
+        return False
 
-    # Check exact matches
-    for allowed in ALLOWED_COMMANDS:
-        if cmd_lower == allowed.lower():
-            return True
-        # Also match if the command starts with an allowed prefix
-        # e.g., "git status" matches "git status ."
-        if cmd_lower.startswith(allowed.lower()):
-            return True
+    tokens = _split_command(cmd)
+    if not tokens:
+        return False
+
+    canonical = " ".join(tokens).lower()
+    allowed_canonical = {
+        " ".join(_split_command(allowed)).lower()
+        for allowed in ALLOWED_COMMANDS
+    }
+    if canonical in allowed_canonical:
+        return True
+
+    head = tokens[0].lower()
+
+    # Safe flexible form: `echo <text>`
+    if head == "echo" and len(tokens) >= 1:
+        return True
+
+    # Safe flexible form: `pip show <package-name>`
+    if (
+        head == "pip"
+        and len(tokens) == 3
+        and tokens[1].lower() == "show"
+        and re.fullmatch(r"[A-Za-z0-9_.-]+", tokens[2]) is not None
+    ):
+        return True
 
     return False
 
 
 def _is_command_blocked(command: str) -> bool:
     """Check if a command matches any blocked patterns."""
+    if _contains_shell_controls(command):
+        return True
+
     for pattern in BLOCKED_PATTERNS:
         if re.search(pattern, command, re.IGNORECASE):
             return True
@@ -178,7 +218,8 @@ async def run_command(
     logger.info("Executing command: %s (cwd=%s, timeout=%ds)", command, cwd, timeout)
 
     try:
-        # Use shell=True on Windows for proper command interpretation
+        # Use shell=True on Windows for proper command interpretation.
+        # Safety is enforced by allowlist + blocked-pattern checks above.
         proc = await asyncio.create_subprocess_shell(
             command,
             cwd=cwd,
@@ -239,3 +280,5 @@ async def run_approved_command(
     This should only be called after explicit user confirmation via the UI.
     """
     return await run_command(command, cwd=cwd, timeout=timeout, force_approve=True)
+
+

@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { runAgent, type TraceEvent, type AgentResult } from "../lib/api";
+import { runAgent, streamTrace, type TraceEvent, type AgentResult } from "../lib/api";
 
 export default function AgentsPage() {
     const [input, setInput] = useState("");
@@ -25,34 +25,53 @@ export default function AgentsPage() {
             const res = await runAgent(text, model);
             setResult(res);
 
-            // Build trace events from the crew result for display
-            const syntheticTraces: TraceEvent[] = [
-                {
+            const streamed: TraceEvent[] = [];
+            try {
+                for await (const event of streamTrace(res.run_id)) {
+                    streamed.push(event);
+                    setTraces([...streamed]);
+                }
+            } catch (streamErr) {
+                const traceError: TraceEvent = {
                     run_id: res.run_id,
-                    agent_name: "planner",
-                    event_type: "output",
-                    content: res.plan,
+                    agent_name: "system",
+                    event_type: "error",
+                    content: streamErr instanceof Error ? streamErr.message : "Trace stream failed",
                     timestamp: new Date().toISOString(),
                     metadata: {},
-                },
-                {
-                    run_id: res.run_id,
-                    agent_name: "researcher",
-                    event_type: "output",
-                    content: res.research,
-                    timestamp: new Date().toISOString(),
-                    metadata: {},
-                },
-                {
-                    run_id: res.run_id,
-                    agent_name: "synthesizer",
-                    event_type: "output",
-                    content: res.response,
-                    timestamp: new Date().toISOString(),
-                    metadata: {},
-                },
-            ];
-            setTraces(syntheticTraces);
+                };
+                setTraces((prev) => [...prev, traceError]);
+            }
+
+            if (streamed.length === 0) {
+                // Fallback: still show the actual agent outputs if no trace events were emitted.
+                setTraces([
+                    {
+                        run_id: res.run_id,
+                        agent_name: "planner",
+                        event_type: "output",
+                        content: res.plan,
+                        timestamp: new Date().toISOString(),
+                        metadata: {},
+                    },
+                    {
+                        run_id: res.run_id,
+                        agent_name: "researcher",
+                        event_type: "output",
+                        content: res.research,
+                        timestamp: new Date().toISOString(),
+                        metadata: {},
+                    },
+                    {
+                        run_id: res.run_id,
+                        agent_name: "synthesizer",
+                        event_type: "output",
+                        content: res.response,
+                        timestamp: new Date().toISOString(),
+                        metadata: {},
+                    },
+                ]);
+            }
         } catch (err) {
             const errorTrace: TraceEvent = {
                 run_id: "error",
@@ -215,7 +234,7 @@ export default function AgentsPage() {
                         <div className="empty-state-title">No Agent Runs Yet</div>
                         <div className="empty-state-text">
                             Submit a query above to trigger the Planner → Researcher →
-                            Synthesizer pipeline. You'll see a real-time trace of each agent's
+                            Synthesizer pipeline. You'll see the recorded trace of each agent's
                             work.
                         </div>
                     </div>

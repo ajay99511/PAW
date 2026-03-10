@@ -4,9 +4,10 @@ All settings are loaded from environment variables via .env file.
 """
 
 import os
-from pydantic_settings import BaseSettings
-from pydantic import Field
+
 from dotenv import load_dotenv
+from pydantic import Field
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # Load .env from project root
 load_dotenv(os.path.join(os.path.dirname(__file__), "..", "..", ".env"))
@@ -105,17 +106,18 @@ class Settings(BaseSettings):
     api_host: str = Field(default="127.0.0.1", alias="API_HOST")
     api_port: int = Field(default=8000, alias="API_PORT")
 
-    class Config:
-        env_file = ".env"
-        env_file_encoding = "utf-8"
-        populate_by_name = True  # Allow both alias and field name
-        extra = "ignore"
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        populate_by_name=True,
+        extra="ignore",
+    )
 
     def resolve_model(self, model_key: str) -> str:
         """
         Resolve a model key to a LiteLLM model string.
 
-        Priority: short alias → runtime active model → raw model string.
+        Priority: short alias -> runtime active model -> raw model string.
         """
         # Short aliases always resolve explicitly
         model_map = {
@@ -141,5 +143,5 @@ class Settings(BaseSettings):
         return model_key
 
 
-# Singleton instance — import this everywhere
+# Singleton instance - import this everywhere
 settings = Settings()

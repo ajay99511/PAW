@@ -2,10 +2,10 @@
  * PersonalAssist API Client
  *
  * Type-safe HTTP client for all PersonalAssist backend endpoints.
- * Connects to the FastAPI server at localhost:8000.
+ * Connects to the FastAPI server at localhost:13420.
  */
 
-const API_BASE = "http://127.0.0.1:8000";
+const API_BASE = "http://127.0.0.1:13420";
 
 // ── Types ──────────────────────────────────────────────────────────
 
@@ -14,12 +14,42 @@ export interface ChatResponse {
   model_used: string;
   memory_used?: boolean;
   memories_extracted?: Record<string, unknown>;
+  thread_id?: string;
+}
+
+export interface ChatMessage {
+  id: string;
+  role: "user" | "assistant";
+  content: string;
+  model_used?: string;
+  memory_used: boolean;
+  timestamp: string;
+}
+
+export interface ChatThread {
+  id: string;
+  title: string;
+  updated_at: string;
+}
+
+export interface ChatThreadDetail extends ChatThread {
+  messages: ChatMessage[];
+}
+
+export interface IngestErrorItem {
+  file: string;
+  error: string;
 }
 
 export interface IngestReport {
-  files_processed: number;
-  chunks_created: number;
-  errors: string[];
+  total_files: number;
+  processed_files: number;
+  total_chunks: number;
+  skipped_files: number;
+  failed_files: number;
+  errors: IngestErrorItem[];
+  duration_seconds: number;
+  files_processed: string[];
 }
 
 export interface ModelInfo {
@@ -28,8 +58,8 @@ export interface ModelInfo {
   provider: string;
   is_local: boolean;
   is_active: boolean;
-  size_label?: string;
-  parameter_count?: string;
+  size_gb?: number;
+  parameter_size?: string;
   description?: string;
   context_window?: string;
   pricing_input?: string;
@@ -109,32 +139,35 @@ export async function ingestDocument(
 
 export async function chatPlain(
   message: string,
-  model: string = "local"
+  model: string = "local",
+  threadId?: string
 ): Promise<ChatResponse> {
   return api<ChatResponse>("/chat", {
     method: "POST",
-    body: JSON.stringify({ message, model }),
+    body: JSON.stringify({ message, model, thread_id: threadId }),
   });
 }
 
 export async function chatSmart(
   message: string,
-  model: string = "local"
+  model: string = "local",
+  threadId?: string
 ): Promise<ChatResponse> {
   return api<ChatResponse>("/chat/smart", {
     method: "POST",
-    body: JSON.stringify({ message, model }),
+    body: JSON.stringify({ message, model, thread_id: threadId }),
   });
 }
 
 export async function* chatStream(
   message: string,
-  model: string = "local"
-): AsyncGenerator<string, void, undefined> {
+  model: string = "local",
+  threadId?: string
+): AsyncGenerator<string | { thread_id: string }, void, undefined> {
   const res = await fetch(`${API_BASE}/chat/stream`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ message, model }),
+    body: JSON.stringify({ message, model, thread_id: threadId }),
   });
 
   if (!res.ok) throw new Error(`Stream error: ${res.status}`);
@@ -158,6 +191,7 @@ export async function* chatStream(
         if (data === "[DONE]") return;
         try {
           const parsed = JSON.parse(data);
+          if (parsed.thread_id) yield { thread_id: parsed.thread_id };
           if (parsed.text) yield parsed.text;
           if (parsed.error) throw new Error(parsed.error);
         } catch {
@@ -166,6 +200,18 @@ export async function* chatStream(
       }
     }
   }
+}
+
+export async function getChatThreads(): Promise<{ threads: ChatThread[] }> {
+  return api("/chat/threads");
+}
+
+export async function getChatThread(threadId: string): Promise<ChatThreadDetail> {
+  return api(`/chat/threads/${encodeURIComponent(threadId)}`);
+}
+
+export async function deleteChatThread(threadId: string): Promise<{ status: string }> {
+  return api(`/chat/threads/${encodeURIComponent(threadId)}`, { method: "DELETE" });
 }
 
 // ── Memory ─────────────────────────────────────────────────────────
@@ -440,13 +486,12 @@ export async function toolRepoSummary(
 export async function toolExecCommand(
   command: string,
   cwd?: string,
-  timeout: number = 30,
-  forceApprove: boolean = false
+  timeout: number = 30
 ): Promise<CommandResult> {
   return api("/tools/exec", {
     method: "POST",
     body: JSON.stringify({
-      command, cwd, timeout, force_approve: forceApprove,
+      command, cwd, timeout,
     }),
   });
 }
@@ -574,10 +619,11 @@ export interface SyncStatus {
   snapshots: string[];
 }
 
-export async function triggerSync(): Promise<{ status: string; message: string }> {
+export async function triggerSync(): Promise<{ status: string; message: string; exported?: string[]; failed?: Array<{ collection: string; error: string }> }> {
   return api("/sync/trigger", { method: "POST" });
 }
 
 export async function getSyncStatus(): Promise<SyncStatus> {
   return api("/sync/status");
 }
+

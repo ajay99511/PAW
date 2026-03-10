@@ -1,9 +1,9 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import type { PodcastJob } from "../lib/api";
 import {
-    generatePodcast,
-    getPodcastStatus,
-    listPodcastJobs,
+  generatePodcast,
+  getPodcastStatus,
+  listPodcastJobs,
 } from "../lib/api";
 
 // ── Constants ──────────────────────────────────────────────────────
@@ -12,334 +12,334 @@ const DURATIONS = [15, 30, 60, 90] as const;
 const LEVELS = ["beginner", "intermediate", "advanced"] as const;
 
 const STAGE_LABELS: Record<string, string> = {
-    queued: "Queued",
-    planning: "Planning Curriculum",
-    researching: "Researching Topics",
-    writing: "Writing Script",
-    producing: "Producing Audio",
-    done: "Complete",
-    error: "Error",
+  queued: "Queued",
+  planning: "Planning Curriculum",
+  researching: "Researching Topics",
+  writing: "Writing Script",
+  producing: "Producing Audio",
+  done: "Complete",
+  error: "Error",
 };
 
 const STAGE_ICONS: Record<string, string> = {
-    queued: "⏳",
-    planning: "📋",
-    researching: "🔍",
-    writing: "✍️",
-    producing: "🎵",
-    done: "✅",
-    error: "❌",
+  queued: "⏳",
+  planning: "📋",
+  researching: "🔍",
+  writing: "✍️",
+  producing: "🎵",
+  done: "✅",
+  error: "❌",
 };
 
 // ── Component ──────────────────────────────────────────────────────
 
 export default function PodcastPage() {
-    // Form state
-    const [topic, setTopic] = useState("");
-    const [duration, setDuration] = useState<number>(30);
-    const [level, setLevel] = useState<(typeof LEVELS)[number]>("intermediate");
+  // Form state
+  const [topic, setTopic] = useState("");
+  const [duration, setDuration] = useState<number>(30);
+  const [level, setLevel] = useState<(typeof LEVELS)[number]>("intermediate");
 
-    // Job state
-    const [activeJob, setActiveJob] = useState<PodcastJob | null>(null);
-    const [jobs, setJobs] = useState<PodcastJob[]>([]);
-    const [isGenerating, setIsGenerating] = useState(false);
-    const [error, setError] = useState<string | null>(null);
+  // Job state
+  const [activeJob, setActiveJob] = useState<PodcastJob | null>(null);
+  const [jobs, setJobs] = useState<PodcastJob[]>([]);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-    // Audio player
-    const audioRef = useRef<HTMLAudioElement>(null);
-    const pollRef = useRef<ReturnType<typeof setInterval>>(undefined);
+  // Audio player
+  const audioRef = useRef<HTMLAudioElement>(null);
+  const pollRef = useRef<ReturnType<typeof setInterval>>(undefined);
 
-    // ── Load past jobs on mount ───────────────────────────────────
-    useEffect(() => {
-        (async () => {
-            try {
-                const data = await listPodcastJobs();
-                setJobs(data.jobs);
-            } catch {
-                // Jobs list is non-critical
-            }
-        })();
-    }, []);
+  // ── Load past jobs on mount ───────────────────────────────────
+  useEffect(() => {
+    (async () => {
+      try {
+        const data = await listPodcastJobs();
+        setJobs(data.jobs);
+      } catch {
+        // Jobs list is non-critical
+      }
+    })();
+  }, []);
 
-    // ── Poll active job status ────────────────────────────────────
-    const startPolling = useCallback((jobId: string) => {
-        if (pollRef.current) clearInterval(pollRef.current);
+  // ── Poll active job status ────────────────────────────────────
+  const startPolling = useCallback((jobId: string) => {
+    if (pollRef.current) clearInterval(pollRef.current);
 
-        pollRef.current = setInterval(async () => {
-            try {
-                const status = await getPodcastStatus(jobId);
-                setActiveJob(status);
+    pollRef.current = setInterval(async () => {
+      try {
+        const status = await getPodcastStatus(jobId);
+        setActiveJob(status);
 
-                if (status.status === "done" || status.status === "error") {
-                    clearInterval(pollRef.current);
-                    setIsGenerating(false);
+        if (status.status === "done" || status.status === "error") {
+          clearInterval(pollRef.current);
+          setIsGenerating(false);
 
-                    // Refresh job list
-                    const data = await listPodcastJobs();
-                    setJobs(data.jobs);
+          // Refresh job list
+          const data = await listPodcastJobs();
+          setJobs(data.jobs);
 
-                    if (status.status === "error") {
-                        setError(status.error || "Unknown error");
-                    }
-                }
-            } catch (err) {
-                // Polling failure is transient
-            }
-        }, 1500);
-    }, []);
-
-    // Cleanup on unmount
-    useEffect(() => {
-        return () => {
-            if (pollRef.current) clearInterval(pollRef.current);
-        };
-    }, []);
-
-    // ── Generate ──────────────────────────────────────────────────
-    const handleGenerate = async () => {
-        if (!topic.trim()) return;
-
-        setError(null);
-        setIsGenerating(true);
-        setActiveJob(null);
-
-        try {
-            const result = await generatePodcast({
-                topic: topic.trim(),
-                duration_minutes: duration,
-                level,
-            });
-
-            setActiveJob({
-                job_id: result.job_id,
-                topic: topic.trim(),
-                status: "queued",
-                progress_pct: 0,
-                created_at: new Date().toISOString(),
-                duration_minutes: duration,
-                level,
-            });
-
-            startPolling(result.job_id);
-        } catch (err) {
-            setError(err instanceof Error ? err.message : "Failed to start generation");
-            setIsGenerating(false);
+          if (status.status === "error") {
+            setError(status.error || "Unknown error");
+          }
         }
+      } catch (err) {
+        // Polling failure is transient
+      }
+    }, 1500);
+  }, []);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (pollRef.current) clearInterval(pollRef.current);
     };
+  }, []);
 
-    // ── Audio URL ─────────────────────────────────────────────────
-    const audioUrl =
-        activeJob?.status === "done" && activeJob?.job_id
-            ? `http://127.0.0.1:8000/api/podcast/download/${activeJob.job_id}`
-            : null;
+  // ── Generate ──────────────────────────────────────────────────
+  const handleGenerate = async () => {
+    if (!topic.trim()) return;
 
-    // ── Render ────────────────────────────────────────────────────
-    return (
-        <div className="podcast-page">
-            <div className="page-header">
-                <h1>🎙️ Podcast Studio</h1>
-                <p style={{ color: "var(--text-muted)", margin: "4px 0 0" }}>
-                    Generate custom audio learning sessions on any topic
-                </p>
+    setError(null);
+    setIsGenerating(true);
+    setActiveJob(null);
+
+    try {
+      const result = await generatePodcast({
+        topic: topic.trim(),
+        duration_minutes: duration,
+        level,
+      });
+
+      setActiveJob({
+        job_id: result.job_id,
+        topic: topic.trim(),
+        status: "queued",
+        progress_pct: 0,
+        created_at: new Date().toISOString(),
+        duration_minutes: duration,
+        level,
+      });
+
+      startPolling(result.job_id);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to start generation");
+      setIsGenerating(false);
+    }
+  };
+
+  // ── Audio URL ─────────────────────────────────────────────────
+  const audioUrl =
+    activeJob?.status === "done" && activeJob?.job_id
+      ? `http://127.0.0.1:13420/api/podcast/download/${activeJob.job_id}`
+      : null;
+
+  // ── Render ────────────────────────────────────────────────────
+  return (
+    <div className="podcast-page">
+      <div className="page-header">
+        <h1>🎙️ Podcast Studio</h1>
+        <p style={{ color: "var(--text-muted)", margin: "4px 0 0" }}>
+          Generate custom audio learning sessions on any topic
+        </p>
+      </div>
+
+      <div className="podcast-layout">
+        {/* ── Input Form ── */}
+        <div className="podcast-form-card glass-card">
+          <h3 style={{ margin: "0 0 16px" }}>New Podcast</h3>
+
+          {/* Topic */}
+          <label className="form-label">Topic</label>
+          <input
+            id="podcast-topic"
+            type="text"
+            className="form-input"
+            placeholder="e.g. Advanced Rust Concurrency Patterns"
+            value={topic}
+            onChange={(e) => setTopic(e.target.value)}
+            disabled={isGenerating}
+            onKeyDown={(e) => e.key === "Enter" && handleGenerate()}
+          />
+
+          {/* Duration */}
+          <label className="form-label" style={{ marginTop: 16 }}>
+            Duration
+          </label>
+          <div className="btn-group">
+            {DURATIONS.map((d) => (
+              <button
+                key={d}
+                className={`btn-option ${duration === d ? "active" : ""}`}
+                onClick={() => setDuration(d)}
+                disabled={isGenerating}
+              >
+                {d} min
+              </button>
+            ))}
+          </div>
+
+          {/* Level */}
+          <label className="form-label" style={{ marginTop: 16 }}>
+            Level
+          </label>
+          <div className="btn-group">
+            {LEVELS.map((l) => (
+              <button
+                key={l}
+                className={`btn-option ${level === l ? "active" : ""}`}
+                onClick={() => setLevel(l)}
+                disabled={isGenerating}
+              >
+                {l.charAt(0).toUpperCase() + l.slice(1)}
+              </button>
+            ))}
+          </div>
+
+          {/* Generate Button */}
+          <button
+            id="podcast-generate-btn"
+            className="btn-primary podcast-generate-btn"
+            onClick={handleGenerate}
+            disabled={isGenerating || !topic.trim()}
+            style={{ marginTop: 24, width: "100%" }}
+          >
+            {isGenerating ? "Generating..." : "🎙️ Generate Podcast"}
+          </button>
+
+          {error && (
+            <div className="podcast-error" style={{ marginTop: 12 }}>
+              ❌ {error}
             </div>
+          )}
+        </div>
 
-            <div className="podcast-layout">
-                {/* ── Input Form ── */}
-                <div className="podcast-form-card glass-card">
-                    <h3 style={{ margin: "0 0 16px" }}>New Podcast</h3>
+        {/* ── Progress / Player ── */}
+        <div className="podcast-progress-card glass-card">
+          {activeJob ? (
+            <>
+              {/* Title */}
+              <h3 style={{ margin: "0 0 8px" }}>
+                {STAGE_ICONS[activeJob.status] || "🎙️"}{" "}
+                {activeJob.topic}
+              </h3>
+              <p style={{ color: "var(--text-muted)", fontSize: 13, margin: "0 0 16px" }}>
+                {activeJob.duration_minutes} min • {activeJob.level}
+              </p>
 
-                    {/* Topic */}
-                    <label className="form-label">Topic</label>
-                    <input
-                        id="podcast-topic"
-                        type="text"
-                        className="form-input"
-                        placeholder="e.g. Advanced Rust Concurrency Patterns"
-                        value={topic}
-                        onChange={(e) => setTopic(e.target.value)}
-                        disabled={isGenerating}
-                        onKeyDown={(e) => e.key === "Enter" && handleGenerate()}
-                    />
+              {/* Progress Bar */}
+              <div className="progress-bar-container">
+                <div
+                  className="progress-bar-fill"
+                  style={{
+                    width: `${activeJob.progress_pct}%`,
+                    transition: "width 0.8s ease",
+                  }}
+                />
+              </div>
+              <div className="progress-label">
+                <span>{STAGE_LABELS[activeJob.status] || activeJob.status}</span>
+                <span>{activeJob.progress_pct}%</span>
+              </div>
 
-                    {/* Duration */}
-                    <label className="form-label" style={{ marginTop: 16 }}>
-                        Duration
-                    </label>
-                    <div className="btn-group">
-                        {DURATIONS.map((d) => (
-                            <button
-                                key={d}
-                                className={`btn-option ${duration === d ? "active" : ""}`}
-                                onClick={() => setDuration(d)}
-                                disabled={isGenerating}
-                            >
-                                {d} min
-                            </button>
-                        ))}
-                    </div>
+              {/* Stage Indicators */}
+              <div className="stage-indicators">
+                {["planning", "researching", "writing", "producing", "done"].map(
+                  (stage) => {
+                    const stageOrder = [
+                      "queued", "planning", "researching", "writing", "producing", "done",
+                    ];
+                    const currentIdx = stageOrder.indexOf(activeJob.status);
+                    const stageIdx = stageOrder.indexOf(stage);
+                    const isDone = stageIdx < currentIdx;
+                    const isCurrent = stage === activeJob.status;
 
-                    {/* Level */}
-                    <label className="form-label" style={{ marginTop: 16 }}>
-                        Level
-                    </label>
-                    <div className="btn-group">
-                        {LEVELS.map((l) => (
-                            <button
-                                key={l}
-                                className={`btn-option ${level === l ? "active" : ""}`}
-                                onClick={() => setLevel(l)}
-                                disabled={isGenerating}
-                            >
-                                {l.charAt(0).toUpperCase() + l.slice(1)}
-                            </button>
-                        ))}
-                    </div>
+                    return (
+                      <div
+                        key={stage}
+                        className={`stage-indicator ${isDone ? "done" : ""} ${isCurrent ? "current" : ""}`}
+                      >
+                        <span className="stage-dot" />
+                        <span className="stage-name">{STAGE_LABELS[stage]}</span>
+                      </div>
+                    );
+                  }
+                )}
+              </div>
 
-                    {/* Generate Button */}
-                    <button
-                        id="podcast-generate-btn"
-                        className="btn-primary podcast-generate-btn"
-                        onClick={handleGenerate}
-                        disabled={isGenerating || !topic.trim()}
-                        style={{ marginTop: 24, width: "100%" }}
-                    >
-                        {isGenerating ? "Generating..." : "🎙️ Generate Podcast"}
-                    </button>
-
-                    {error && (
-                        <div className="podcast-error" style={{ marginTop: 12 }}>
-                            ❌ {error}
-                        </div>
-                    )}
+              {/* Audio Player */}
+              {audioUrl && (
+                <div className="audio-player-card" style={{ marginTop: 20 }}>
+                  <audio
+                    ref={audioRef}
+                    controls
+                    src={audioUrl}
+                    style={{ width: "100%" }}
+                  />
+                  <a
+                    href={audioUrl}
+                    download
+                    className="btn-primary"
+                    style={{
+                      display: "inline-block",
+                      marginTop: 10,
+                      textDecoration: "none",
+                      textAlign: "center",
+                    }}
+                  >
+                    ⬇️ Download MP3
+                  </a>
                 </div>
-
-                {/* ── Progress / Player ── */}
-                <div className="podcast-progress-card glass-card">
-                    {activeJob ? (
-                        <>
-                            {/* Title */}
-                            <h3 style={{ margin: "0 0 8px" }}>
-                                {STAGE_ICONS[activeJob.status] || "🎙️"}{" "}
-                                {activeJob.topic}
-                            </h3>
-                            <p style={{ color: "var(--text-muted)", fontSize: 13, margin: "0 0 16px" }}>
-                                {activeJob.duration_minutes} min • {activeJob.level}
-                            </p>
-
-                            {/* Progress Bar */}
-                            <div className="progress-bar-container">
-                                <div
-                                    className="progress-bar-fill"
-                                    style={{
-                                        width: `${activeJob.progress_pct}%`,
-                                        transition: "width 0.8s ease",
-                                    }}
-                                />
-                            </div>
-                            <div className="progress-label">
-                                <span>{STAGE_LABELS[activeJob.status] || activeJob.status}</span>
-                                <span>{activeJob.progress_pct}%</span>
-                            </div>
-
-                            {/* Stage Indicators */}
-                            <div className="stage-indicators">
-                                {["planning", "researching", "writing", "producing", "done"].map(
-                                    (stage) => {
-                                        const stageOrder = [
-                                            "queued", "planning", "researching", "writing", "producing", "done",
-                                        ];
-                                        const currentIdx = stageOrder.indexOf(activeJob.status);
-                                        const stageIdx = stageOrder.indexOf(stage);
-                                        const isDone = stageIdx < currentIdx;
-                                        const isCurrent = stage === activeJob.status;
-
-                                        return (
-                                            <div
-                                                key={stage}
-                                                className={`stage-indicator ${isDone ? "done" : ""} ${isCurrent ? "current" : ""}`}
-                                            >
-                                                <span className="stage-dot" />
-                                                <span className="stage-name">{STAGE_LABELS[stage]}</span>
-                                            </div>
-                                        );
-                                    }
-                                )}
-                            </div>
-
-                            {/* Audio Player */}
-                            {audioUrl && (
-                                <div className="audio-player-card" style={{ marginTop: 20 }}>
-                                    <audio
-                                        ref={audioRef}
-                                        controls
-                                        src={audioUrl}
-                                        style={{ width: "100%" }}
-                                    />
-                                    <a
-                                        href={audioUrl}
-                                        download
-                                        className="btn-primary"
-                                        style={{
-                                            display: "inline-block",
-                                            marginTop: 10,
-                                            textDecoration: "none",
-                                            textAlign: "center",
-                                        }}
-                                    >
-                                        ⬇️ Download MP3
-                                    </a>
-                                </div>
-                            )}
-                        </>
-                    ) : (
-                        <div className="podcast-empty-state">
-                            <div style={{ fontSize: 48, marginBottom: 12 }}>🎧</div>
-                            <h3 style={{ margin: "0 0 8px", color: "var(--text-primary)" }}>
-                                Ready to Learn
-                            </h3>
-                            <p style={{ color: "var(--text-muted)", fontSize: 14 }}>
-                                Enter a topic and click Generate to create your personalized
-                                audio learning session.
-                            </p>
-                        </div>
-                    )}
-                </div>
+              )}
+            </>
+          ) : (
+            <div className="podcast-empty-state">
+              <div style={{ fontSize: 48, marginBottom: 12 }}>🎧</div>
+              <h3 style={{ margin: "0 0 8px", color: "var(--text-primary)" }}>
+                Ready to Learn
+              </h3>
+              <p style={{ color: "var(--text-muted)", fontSize: 14 }}>
+                Enter a topic and click Generate to create your personalized
+                audio learning session.
+              </p>
             </div>
+          )}
+        </div>
+      </div>
 
-            {/* ── Recent Jobs ── */}
-            {jobs.length > 0 && (
-                <div className="podcast-history glass-card" style={{ marginTop: 20 }}>
-                    <h3 style={{ margin: "0 0 12px" }}>Recent Podcasts</h3>
-                    <div className="jobs-list">
-                        {jobs.slice(0, 8).map((job) => (
-                            <div
-                                key={job.job_id}
-                                className={`job-item ${activeJob?.job_id === job.job_id ? "active" : ""}`}
-                                onClick={() => {
-                                    if (job.status === "done") {
-                                        setActiveJob(job);
-                                    }
-                                }}
-                                style={{ cursor: job.status === "done" ? "pointer" : "default" }}
-                            >
-                                <span className="job-icon">
-                                    {STAGE_ICONS[job.status] || "🎙️"}
-                                </span>
-                                <div className="job-info">
-                                    <div className="job-topic">{job.topic}</div>
-                                    <div className="job-meta">
-                                        {job.duration_minutes}min • {job.level} •{" "}
-                                        {STAGE_LABELS[job.status]}
-                                    </div>
-                                </div>
-                            </div>
-                        ))}
-                    </div>
+      {/* ── Recent Jobs ── */}
+      {jobs.length > 0 && (
+        <div className="podcast-history glass-card" style={{ marginTop: 20 }}>
+          <h3 style={{ margin: "0 0 12px" }}>Recent Podcasts</h3>
+          <div className="jobs-list">
+            {jobs.slice(0, 8).map((job) => (
+              <div
+                key={job.job_id}
+                className={`job-item ${activeJob?.job_id === job.job_id ? "active" : ""}`}
+                onClick={() => {
+                  if (job.status === "done") {
+                    setActiveJob(job);
+                  }
+                }}
+                style={{ cursor: job.status === "done" ? "pointer" : "default" }}
+              >
+                <span className="job-icon">
+                  {STAGE_ICONS[job.status] || "🎙️"}
+                </span>
+                <div className="job-info">
+                  <div className="job-topic">{job.topic}</div>
+                  <div className="job-meta">
+                    {job.duration_minutes}min • {job.level} •{" "}
+                    {STAGE_LABELS[job.status]}
+                  </div>
                 </div>
-            )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
-            {/* ── Scoped Styles ── */}
-            <style>{`
+      {/* ── Scoped Styles ── */}
+      <style>{`
         .podcast-page {
           padding: 0;
           max-width: 900px;
@@ -602,6 +602,6 @@ export default function PodcastPage() {
           margin-top: 2px;
         }
       `}</style>
-        </div>
-    );
+    </div>
+  );
 }

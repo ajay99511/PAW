@@ -17,6 +17,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import re
 from typing import AsyncIterator
 
 import litellm
@@ -36,6 +37,15 @@ if settings.anthropic_api_key:
     os.environ["ANTHROPIC_API_KEY"] = settings.anthropic_api_key
 if settings.openai_api_key:
     os.environ["OPENAI_API_KEY"] = settings.openai_api_key
+
+
+def _redact_sensitive(text: str) -> str:
+    """Redact common API key patterns and query parameters from logs/errors."""
+    redacted = text
+    redacted = re.sub(r"(key=)[^&\s'\"]+", r"\1[REDACTED]", redacted, flags=re.IGNORECASE)
+    redacted = re.sub(r"AIza[0-9A-Za-z_\-]{20,}", "[REDACTED_GOOGLE_API_KEY]", redacted)
+    redacted = re.sub(r"(api[_-]?key\s*[:=]\s*)([^\s,;]+)", r"\1[REDACTED]", redacted, flags=re.IGNORECASE)
+    return redacted
 
 
 async def chat(
@@ -70,16 +80,19 @@ async def chat(
             return response.choices[0].message.content
         except Exception as exc:
             last_exc = exc
+            safe_exc = _redact_sensitive(str(exc))
             if attempt < max_retries:
                 wait = 2 ** attempt  # 1s, 2s
                 logger.warning(
-                    "model_gateway.chat attempt %d failed (%s), retrying in %ss…",
-                    attempt + 1, exc, wait,
+                    "model_gateway.chat attempt %d failed (%s), retrying in %ss...",
+                    attempt + 1, safe_exc, wait,
                 )
                 await asyncio.sleep(wait)
             else:
                 logger.error("model_gateway.chat failed after %d attempts", max_retries + 1)
-    raise last_exc  # type: ignore[misc]
+
+    safe_last = _redact_sensitive(str(last_exc)) if last_exc else "Unknown model error"
+    raise RuntimeError(f"Model request failed: {safe_last}") from last_exc
 
 
 async def chat_stream(
@@ -98,11 +111,16 @@ async def chat_stream(
     resolved = settings.resolve_model(model)
     kwargs = _build_kwargs(resolved, messages, temperature, max_tokens, stream=True)
 
-    response = await litellm.acompletion(**kwargs)
-    async for chunk in response:
-        delta = chunk.choices[0].delta
-        if delta and delta.content:
-            yield delta.content
+    try:
+        response = await litellm.acompletion(**kwargs)
+        async for chunk in response:
+            delta = chunk.choices[0].delta
+            if delta and delta.content:
+                yield delta.content
+    except Exception as exc:
+        safe_exc = _redact_sensitive(str(exc))
+        logger.error("model_gateway.chat_stream failed: %s", safe_exc)
+        raise RuntimeError(f"Model stream failed: {safe_exc}") from exc
 
 
 # ── Helpers ──────────────────────────────────────────────────────────

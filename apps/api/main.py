@@ -5,6 +5,8 @@ Routes: health, chat (plain/stream/smart), memory, ingest, agents
 
 import json
 import logging
+import os
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
@@ -34,6 +36,14 @@ async def lifespan(app: FastAPI):
     # Startup
     logger.info("Starting up PersonalAssist API and Background Scheduler...")
     
+    # Initialize chat database (required for chat persistence endpoints)
+    try:
+        from packages.shared.db import init_db
+        await init_db()
+    except Exception as e:
+        logger.error(f"Failed to initialize database: {e}")
+        raise
+        
     # Check for and restore P2P synced snapshots
     try:
         from packages.automation.sync import restore_latest_snapshots
@@ -60,10 +70,19 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+cors_origins_raw = os.getenv("CORS_ALLOW_ORIGINS", "")
+allowed_origins = [o.strip() for o in cors_origins_raw.split(",") if o.strip()]
+if not allowed_origins:
+    allowed_origins = [
+        "http://127.0.0.1:1420",
+        "http://localhost:1420",
+        "tauri://localhost",
+    ]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
+    allow_origins=allowed_origins,
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -79,6 +98,7 @@ class ChatRequest(BaseModel):
     message: str
     model: str = "local"
     temperature: float = 0.7
+    thread_id: Optional[str] = None
 
 
 class MemoryStoreRequest(BaseModel):
@@ -128,6 +148,28 @@ class WorkflowSaveRequest(BaseModel):
 
 _ACTIVE_CONTEXT: dict = {}
 
+def _build_thread_title(message: str) -> str:
+    title = (message or "New Chat").strip() or "New Chat"
+    return title[:57] + "..." if len(title) > 60 else title
+
+
+async def _resolve_or_create_thread(session, thread_id: Optional[str], message: str):
+    from packages.memory.models import ChatThread
+
+    if thread_id:
+        existing = await session.get(ChatThread, thread_id)
+        if existing:
+            return existing
+
+    thread = ChatThread(title=_build_thread_title(message))
+    session.add(thread)
+    await session.commit()
+    await session.refresh(thread)
+    return thread
+
+
+def _touch_thread(thread) -> None:
+    thread.updated_at = datetime.now(timezone.utc)
 # ── Health ───────────────────────────────────────────────────────────
 
 
@@ -142,25 +184,93 @@ def health():
 @app.post("/chat")
 async def chat_endpoint(req: ChatRequest):
     """Non-streaming chat via model gateway."""
+    from packages.shared.db import AsyncSessionLocal
+    from packages.memory.models import ChatMessage
+
+    async with AsyncSessionLocal() as session:
+        thread = await _resolve_or_create_thread(session, req.thread_id, req.message)
+        req.thread_id = thread.id
+
+        user_msg = ChatMessage(
+            thread_id=req.thread_id,
+            role="user",
+            content=req.message,
+        )
+        _touch_thread(thread)
+        session.add(user_msg)
+        await session.commit()
+
     messages = [{"role": "user", "content": req.message}]
+
     try:
         response = await chat(messages, model=req.model, temperature=req.temperature)
-        return {"response": response, "model_used": settings.resolve_model(req.model)}
     except Exception as exc:
         logger.error("Chat error: %s", exc)
         raise HTTPException(status_code=502, detail=str(exc))
 
+    model_used = settings.resolve_model(req.model)
+    async with AsyncSessionLocal() as session:
+        thread = await _resolve_or_create_thread(session, req.thread_id, req.message)
+        assistant_msg = ChatMessage(
+            thread_id=req.thread_id,
+            role="assistant",
+            content=response,
+            model_used=model_used,
+        )
+        _touch_thread(thread)
+        session.add(assistant_msg)
+        await session.commit()
+
+    return {
+        "response": response,
+        "model_used": model_used,
+        "thread_id": req.thread_id,
+    }
+
 
 @app.post("/chat/stream")
 async def chat_stream_endpoint(req: ChatRequest):
-    """SSE streaming chat via model gateway."""
+    """SSE streaming chat via model gateway with persistence."""
+    from packages.shared.db import AsyncSessionLocal
+    from packages.memory.models import ChatMessage
+
+    async with AsyncSessionLocal() as session:
+        thread = await _resolve_or_create_thread(session, req.thread_id, req.message)
+        req.thread_id = thread.id
+
+        user_msg = ChatMessage(
+            thread_id=req.thread_id,
+            role="user",
+            content=req.message,
+        )
+        _touch_thread(thread)
+        session.add(user_msg)
+        await session.commit()
+
     messages = [{"role": "user", "content": req.message}]
 
     async def generate():
+        full_response = ""
         try:
+            yield f"data: {json.dumps({'thread_id': req.thread_id})}\n\n"
+
             async for chunk in chat_stream(messages, model=req.model, temperature=req.temperature):
+                full_response += chunk
                 yield f"data: {json.dumps({'text': chunk})}\n\n"
             yield "data: [DONE]\n\n"
+
+            async with AsyncSessionLocal() as session:
+                thread = await _resolve_or_create_thread(session, req.thread_id, req.message)
+                assistant_msg = ChatMessage(
+                    thread_id=req.thread_id,
+                    role="assistant",
+                    content=full_response,
+                    model_used=settings.resolve_model(req.model),
+                )
+                _touch_thread(thread)
+                session.add(assistant_msg)
+                await session.commit()
+
         except Exception as exc:
             logger.error("Stream error: %s", exc)
             yield f"data: {json.dumps({'error': str(exc)})}\n\n"
@@ -170,25 +280,34 @@ async def chat_stream_endpoint(req: ChatRequest):
 
 @app.post("/chat/smart")
 async def chat_smart(req: ChatRequest):
-    """
-    RAG-enhanced chat with auto-learning.
+    """RAG-enhanced chat with auto-learning and persistence."""
+    from packages.shared.db import AsyncSessionLocal
+    from packages.memory.models import ChatMessage
 
-    1. Retrieves relevant memories AND documents for context
-    2. Sends augmented prompt to the LLM
-    3. Auto-extracts facts from the conversation into Mem0
-    """
+    async with AsyncSessionLocal() as session:
+        thread = await _resolve_or_create_thread(session, req.thread_id, req.message)
+        req.thread_id = thread.id
+
+        user_msg = ChatMessage(
+            thread_id=req.thread_id,
+            role="user",
+            content=req.message,
+        )
+        _touch_thread(thread)
+        session.add(user_msg)
+        await session.commit()
+
     messages = [{"role": "user", "content": req.message}]
     context_prefix = ""
     memory_used = False
 
-    # ── Step 0: IDE / Active Context ─────────────────────────────
     global _ACTIVE_CONTEXT
     if _ACTIVE_CONTEXT:
         context_prefix += f"USER'S ACTIVE CONTEXT (IDE/Terminal):\n{json.dumps(_ACTIVE_CONTEXT, indent=2)}\n\n"
 
-    # ── Step 1: Build hybrid context (Mem0 + Qdrant RAG) ─────────
     try:
         from packages.memory.memory_service import build_context
+
         rag_context = await build_context(req.message, user_id="default")
         if rag_context:
             context_prefix += "RETRIEVED KNOWLEDGE & MEMORIES:\n" + rag_context + "\n"
@@ -196,7 +315,6 @@ async def chat_smart(req: ChatRequest):
     except Exception as exc:
         logger.warning("Memory layer unavailable, proceeding without context: %s", exc)
 
-    # ── Step 2: Call LLM with augmented context ──────────────────
     if context_prefix:
         augmented_messages = [
             {"role": "system", "content": context_prefix},
@@ -211,37 +329,127 @@ async def chat_smart(req: ChatRequest):
         logger.error("Smart chat error: %s", exc)
         raise HTTPException(status_code=502, detail=str(exc))
 
-    # ── Step 3: Auto-learn from the conversation (non-blocking) ──
+    model_used = settings.resolve_model(req.model)
+    async with AsyncSessionLocal() as session:
+        thread = await _resolve_or_create_thread(session, req.thread_id, req.message)
+        assistant_msg = ChatMessage(
+            thread_id=req.thread_id,
+            role="assistant",
+            content=response,
+            model_used=model_used,
+            memory_used=memory_used,
+        )
+        _touch_thread(thread)
+        session.add(assistant_msg)
+        await session.commit()
+
     extraction_result = {}
     try:
         from packages.memory.memory_service import extract_and_store_from_turn
         from packages.memory.consolidation import increment_turn, should_consolidate, consolidate_memories
-        
+
         turn_messages = [
             {"role": "user", "content": req.message},
             {"role": "assistant", "content": response},
         ]
         extraction_result = await extract_and_store_from_turn(
-            turn_messages, user_id="default",
+            turn_messages,
+            user_id="default",
         )
-        
-        # Check if consolidation is needed
+
         increment_turn(user_id="default")
         if should_consolidate(user_id="default"):
             logger.info("Turn threshold reached, triggering memory consolidation")
-            # Fire and forget consolidation
             import asyncio
             asyncio.create_task(consolidate_memories(user_id="default", model=req.model))
-            
+
     except Exception as exc:
         logger.warning("Auto-extraction failed (non-fatal): %s", exc)
 
     return {
         "response": response,
-        "model_used": settings.resolve_model(req.model),
+        "model_used": model_used,
         "memory_used": memory_used,
         "memories_extracted": extraction_result,
+        "thread_id": req.thread_id,
     }
+
+
+# ── Chat Thread Endpoints ────────────────────────────────────────────
+
+@app.get("/chat/threads")
+async def list_chat_threads():
+    """List all saved chat threads."""
+    from sqlalchemy import select
+    from packages.shared.db import AsyncSessionLocal
+    from packages.memory.models import ChatThread
+    
+    async with AsyncSessionLocal() as session:
+        result = await session.execute(
+            select(ChatThread).order_by(ChatThread.updated_at.desc())
+        )
+        threads = result.scalars().all()
+        return {"threads": [
+            {
+                "id": t.id, 
+                "title": t.title, 
+                "updated_at": t.updated_at.isoformat()
+            } for t in threads
+        ]}
+
+@app.get("/chat/threads/{thread_id}")
+async def get_chat_thread(thread_id: str):
+    """Get all messages for a specific thread."""
+    from sqlalchemy import select
+    from packages.shared.db import AsyncSessionLocal
+    from packages.memory.models import ChatThread, ChatMessage
+    
+    async with AsyncSessionLocal() as session:
+        result = await session.execute(
+            select(ChatThread).where(ChatThread.id == thread_id)
+        )
+        thread = result.scalars().first()
+        if not thread:
+            raise HTTPException(status_code=404, detail="Thread not found")
+            
+        msg_result = await session.execute(
+            select(ChatMessage).where(ChatMessage.thread_id == thread_id).order_by(ChatMessage.timestamp)
+        )
+        messages = msg_result.scalars().all()
+        
+        return {
+            "id": thread.id,
+            "title": thread.title,
+            "messages": [
+                {
+                    "id": m.id,
+                    "role": m.role,
+                    "content": m.content,
+                    "model_used": m.model_used,
+                    "memory_used": m.memory_used,
+                    "timestamp": m.timestamp.isoformat()
+                } for m in messages
+            ]
+        }
+
+@app.delete("/chat/threads/{thread_id}")
+async def delete_chat_thread(thread_id: str):
+    """Delete a thread and all of its messages."""
+    from sqlalchemy import select
+    from packages.shared.db import AsyncSessionLocal
+    from packages.memory.models import ChatThread
+    
+    async with AsyncSessionLocal() as session:
+        result = await session.execute(
+            select(ChatThread).where(ChatThread.id == thread_id)
+        )
+        thread = result.scalars().first()
+        if not thread:
+            raise HTTPException(status_code=404, detail="Thread not found")
+            
+        await session.delete(thread)
+        await session.commit()
+        return {"status": "deleted", "id": thread_id}
 
 
 # ── Memory Endpoints ─────────────────────────────────────────────────
@@ -387,8 +595,8 @@ async def ingest_endpoint(req: IngestRequest):
 async def agents_run(req: ChatRequest):
     """Run a simple planner agent (placeholder for CrewAI)."""
     try:
-        from packages.agents.base_agent import PlannerAgent
         from packages.agents.crew import run_crew
+        from packages.agents.trace import trace_manager
         
         # Inject context into the user message
         augmented_message = req.message
@@ -400,10 +608,12 @@ async def agents_run(req: ChatRequest):
             )
         
         # We will dispatch to the new lightweight crew orchestration.
+        run_id = trace_manager.new_run()
         result = await run_crew(
             user_message=augmented_message,
             user_id="default",
             model=req.model,
+            run_id=run_id,
         )
         return result
     except Exception as exc:
@@ -537,7 +747,6 @@ class ToolExecRequest(BaseModel):
     command: str
     cwd: Optional[str] = None
     timeout: int = 30
-    force_approve: bool = False
 
 
 class FileReadRequest(BaseModel):
@@ -674,7 +883,6 @@ async def tool_exec_command(req: ToolExecRequest):
     from packages.tools.exec import run_command
     result = await run_command(
         req.command, cwd=req.cwd, timeout=req.timeout,
-        force_approve=req.force_approve,
     )
     if result.get("blocked"):
         raise HTTPException(status_code=403, detail=result["error"])
@@ -694,8 +902,21 @@ async def trigger_sync():
     """Manually force an export of all Qdrant collections to snapshot files."""
     try:
         from packages.automation.sync import create_qdrant_snapshot
-        await create_qdrant_snapshot()
-        return {"status": "success", "message": "Snapshots exported successfully"}
+        result = await create_qdrant_snapshot()
+
+        status = result.get("status", "error")
+        if status == "error":
+            message = result.get("error", "Snapshot export failed")
+            raise HTTPException(status_code=500, detail=message)
+
+        return {
+            "status": status,
+            "message": result.get("message", "Snapshot export completed"),
+            "exported": result.get("exported", []),
+            "failed": result.get("failed", []),
+        }
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Sync trigger failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -736,3 +957,6 @@ async def serve_test_page():
 async def serve_prototype():
     """Serve the full prototype test page."""
     return FileResponse(_STATIC_DIR / "test_prototype.html")
+
+
+

@@ -149,7 +149,6 @@ async def exec_command(
     command: str,
     cwd: str | None = None,
     timeout: int = 30,
-    force_approve: bool = False,
 ) -> dict[str, Any]:
     """
     Execute a shell command in a sandboxed subprocess.
@@ -157,7 +156,7 @@ async def exec_command(
     Pre-approved commands run immediately. Others return 'pending_approval'.
     """
     from packages.tools.exec import run_command
-    return await run_command(command, cwd=cwd, timeout=timeout, force_approve=force_approve)
+    return await run_command(command, cwd=cwd, timeout=timeout)
 
 
 async def exec_approved_command(
@@ -273,3 +272,5 @@ TOOL_REGISTRY: dict[str, dict[str, Any]] = {
         "description": "Execute a shell command (sandboxed, requires allowlist or approval)",
     },
 }
+
+

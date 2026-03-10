@@ -66,7 +66,7 @@ class WorkflowEngine:
             if tool_name == "toolExecCommand":
                 # Hardcoded dummy command for the prototype execution if no config
                 cmd = config.get("command", "echo 'Hello from Visual Tool Node'")
-                result = await run_command(cmd, force_approve=True)
+                result = await run_command(cmd)
                 return result
             else:
                 return {"error": f"Tool {tool_name} execution not fully implemented"}
@@ -95,3 +95,4 @@ class WorkflowEngine:
                 return {"success": False, "trace": execution_trace, "error": str(e)}
 
         return {"success": True, "trace": execution_trace}
+

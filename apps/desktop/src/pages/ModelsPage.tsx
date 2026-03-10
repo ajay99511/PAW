@@ -105,15 +105,15 @@ export default function ModelsPage() {
                     </div>
                 )}
 
-                {/* Ollama specific size metadata */}
-                {m.size_label && (
+                                {/* Ollama specific size metadata */}
+                {typeof m.size_gb === "number" && (
                     <div className="model-detail" style={{ marginTop: '6px' }}>
-                        <strong>Disk Size:</strong> {m.size_label}
+                        <strong>Disk Size:</strong> {m.size_gb.toFixed(1)} GB
                     </div>
                 )}
-                {m.parameter_count && (
+                {m.parameter_size && (
                     <div className="model-detail">
-                        <strong>Parameters:</strong> {m.parameter_count}
+                        <strong>Parameters:</strong> {m.parameter_size}
                     </div>
                 )}
 
@@ -269,3 +269,4 @@ export default function ModelsPage() {
         </>
     );
 }
+

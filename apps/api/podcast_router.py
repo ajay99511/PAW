@@ -31,7 +31,6 @@ from packages.agents.podcast_crew import (
     PodcastRequest,
     run_podcast_crew,
 )
-from packages.agents.trace import trace_manager
 
 logger = logging.getLogger(__name__)
 
@@ -101,9 +100,6 @@ async def generate_podcast(req: PodcastRequest):
     )
     _jobs[job_id] = job
     _cleanup_jobs()
-
-    # Create trace run for SSE streaming
-    trace_run_id = trace_manager.new_run()
 
     # Progress callback that updates the in-memory job AND emits trace events
     async def _on_progress(status: str, pct: int) -> None:
@@ -233,3 +229,5 @@ async def list_jobs():
         "jobs": [j.model_dump() for j in jobs[:20]],
         "count": len(jobs),
     }
+
+

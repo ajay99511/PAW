@@ -18,7 +18,6 @@ Usage:
 
 from __future__ import annotations
 
-import json
 import logging
 from typing import Any
 
@@ -102,10 +101,8 @@ async def run_crew(
     Returns:
         Dict with 'response', 'plan', 'research', 'model_used', 'run_id'.
     """
-    # Create trace run if not provided
+    # Emit traces only when a run_id is explicitly provided by the caller.
     emit_traces = run_id is not None
-    if run_id is None:
-        run_id = trace_manager.new_run()
 
     try:
         # ── Step 0: Gather context ───────────────────────────────
@@ -230,7 +227,7 @@ async def run_crew(
             "plan": plan,
             "research": research,
             "model_used": model,
-            "run_id": run_id,
+            "run_id": run_id or "",
         }
 
     except Exception as exc:

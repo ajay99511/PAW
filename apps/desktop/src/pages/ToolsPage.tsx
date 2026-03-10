@@ -427,7 +427,7 @@ function ExecPanel() {
         }
     };
 
-    const handleRun = async (forceApprove = false) => {
+    const handleRun = async () => {
         if (!command.trim() || loading) return;
         setLoading(true);
         setError(null);
@@ -438,7 +438,6 @@ function ExecPanel() {
                 command.trim(),
                 cwd.trim() || undefined,
                 30,
-                forceApprove,
             );
             setResult(res);
             setHistory((prev) => [{ command: command.trim(), result: res }, ...prev.slice(0, 9)]);
@@ -502,17 +501,9 @@ function ExecPanel() {
                             </span>
                         )}
                         {checkResult.requires_approval && (
-                            <>
-                                <span className="badge badge-warning">⚠️ Requires Approval</span>
-                                <button
-                                    className="btn btn-secondary btn-sm"
-                                    onClick={() => handleRun(true)}
-                                    disabled={loading}
-                                    id="exec-approve"
-                                >
-                                    Approve & Run
-                                </button>
-                            </>
+                            <span className="badge badge-warning">
+                                ⚠️ Manual approval required (not available in this panel)
+                            </span>
                         )}
                     </div>
                 )}
@@ -542,18 +533,8 @@ function ExecPanel() {
                     </div>
 
                     {result.status === "pending_approval" && (
-                        <div style={{ marginBottom: 8 }}>
-                            <div style={{ fontSize: 13, color: "var(--text-secondary)", marginBottom: 8 }}>
-                                {result.message}
-                            </div>
-                            <button
-                                className="btn btn-primary btn-sm"
-                                onClick={() => handleRun(true)}
-                                disabled={loading}
-                                id="exec-approve-inline"
-                            >
-                                ✅ Approve & Execute
-                            </button>
+                        <div style={{ marginBottom: 8, fontSize: 13, color: "var(--text-secondary)" }}>
+                            {result.message} This UI currently supports pre-approved commands only.
                         </div>
                     )}
 
@@ -682,3 +663,4 @@ function RegistryPanel() {
         </>
     );
 }
+

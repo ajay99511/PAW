@@ -35,3 +35,10 @@ Thumbs.db
 apps/desktop/src-tauri/target/
 apps/desktop/node_modules/
 apps/desktop/dist/
+# Local debug artifacts
+backend_logs.txt
+uvicorn_logs*.txt
+sync_test_logs.txt
+test_out.txt
+apps/desktop/tsc_results*.txt
+

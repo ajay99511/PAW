@@ -165,11 +165,11 @@ export default function IngestionPage() {
 
                         <div className="stats-row" style={{ marginTop: 0 }}>
                             <div className="stat-card" style={{ background: "var(--bg-primary)" }}>
-                                <div className="stat-value">{report.files_processed}</div>
+                                <div className="stat-value">{report.processed_files}</div>
                                 <div className="stat-label">Files Processed</div>
                             </div>
                             <div className="stat-card" style={{ background: "var(--bg-primary)" }}>
-                                <div className="stat-value">{report.chunks_created}</div>
+                                <div className="stat-value">{report.total_chunks}</div>
                                 <div className="stat-label">Chunks Indexed</div>
                             </div>
                         </div>
@@ -204,3 +204,5 @@ export default function IngestionPage() {
         </>
     );
 }
+
+
