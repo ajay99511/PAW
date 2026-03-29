@@ -107,10 +107,7 @@ export function useWorkspaceAuditLog(projectId: string | null, limit: number = 1
 export function useJobs(limit: number = 50) {
   return useQuery({
     queryKey: ['jobs', 'list', limit],
-    queryFn: async () => {
-      const response = await fetch('http://127.0.0.1:8000/jobs/list');
-      return response.json();
-    },
+    queryFn: () => api.listJobs(limit),
     staleTime: 1000 * 30,
     refetchInterval: 5000, // Refetch every 5 seconds
   });
@@ -119,10 +116,7 @@ export function useJobs(limit: number = 50) {
 export function useJobStats() {
   return useQuery({
     queryKey: ['jobs', 'stats'],
-    queryFn: async () => {
-      const response = await fetch('http://127.0.0.1:8000/jobs/stats');
-      return response.json();
-    },
+    queryFn: () => api.getJobStats(),
     staleTime: 1000 * 30,
     refetchInterval: 5000,
   });

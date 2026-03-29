@@ -76,6 +76,42 @@ async def health_check() -> list[str]:
     return [c.name for c in collections]
 
 
+async def export_snapshot(collection_name: str | None = None) -> dict[str, str]:
+    """
+    Create a Qdrant collection snapshot.
+
+    Args:
+        collection_name: Optional collection override.
+
+    Returns:
+        Snapshot metadata with collection and snapshot name.
+    """
+    client = _get_client()
+    target_collection = collection_name or COLLECTION
+
+    snapshot = await asyncio.to_thread(
+        client.create_snapshot,
+        collection_name=target_collection,
+    )
+
+    snapshot_name = ""
+    if isinstance(snapshot, dict):
+        snapshot_name = str(snapshot.get("name", ""))
+    else:
+        snapshot_name = str(getattr(snapshot, "name", ""))
+
+    logger.info(
+        "Created snapshot for collection %s: %s",
+        target_collection,
+        snapshot_name or "<unknown>",
+    )
+
+    return {
+        "collection": target_collection,
+        "snapshot": snapshot_name,
+    }
+
+
 async def upsert(
     text: str,
     metadata: dict[str, Any],

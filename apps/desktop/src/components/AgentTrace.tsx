@@ -102,7 +102,7 @@ export default function AgentTrace({ runId }: Props) {
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
           {events.map((event, index) => (
-            <TraceEventCard key={index} event={event} index={index} />
+            <TraceEventCard key={index} event={event} />
           ))}
         </div>
       )}
@@ -110,7 +110,7 @@ export default function AgentTrace({ runId }: Props) {
   );
 }
 
-function TraceEventCard({ event, index }: { event: TraceEvent; index: number }) {
+function TraceEventCard({ event }: { event: TraceEvent }) {
   const [expanded, setExpanded] = useState(false);
 
   const getAgentColor = (agentName: string) => {

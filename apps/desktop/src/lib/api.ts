@@ -140,6 +140,111 @@ export interface PodcastJob {
   level: string;
 }
 
+export interface MemorySessionListResponse {
+  sessions: string[];
+  count: number;
+}
+
+export interface SessionTranscriptEntry {
+  type?: string;
+  timestamp?: string;
+  content?: unknown;
+  [key: string]: unknown;
+}
+
+export interface SessionTranscriptResponse {
+  session_id: string;
+  entries: SessionTranscriptEntry[];
+  count: number;
+}
+
+export interface MemoryBootstrapResponse {
+  summary: {
+    total_files?: number;
+    total_chars?: number;
+    files?: Record<string, { exists: boolean; chars?: number }>;
+  };
+  content: string;
+}
+
+export interface MemoryCompactionResponse {
+  total_sessions?: number;
+  total_compactions?: number;
+  recent_sessions?: string[];
+  session_id?: string;
+  compactions?: SessionTranscriptEntry[];
+  count?: number;
+}
+
+export interface MemorySearchResponse {
+  query: string;
+  context: string;
+  k: number;
+}
+
+export interface TelegramConfig {
+  bot_token_set: boolean;
+  dm_policy: "pairing" | "allowlist" | "open";
+  bot_username: string | null;
+}
+
+export interface TelegramUser {
+  telegram_id: string;
+  user_id: string;
+  approved: boolean;
+  created_at: string;
+  last_message_at: string | null;
+}
+
+export interface A2AAgentCard {
+  agent_id: string;
+  name: string;
+  description: string;
+  capabilities: string[];
+  permissions: {
+    read: string[];
+    write: string[];
+    execute: boolean;
+  };
+  enabled: boolean;
+  input_schema?: Record<string, unknown>;
+  output_schema?: Record<string, unknown>;
+}
+
+export interface A2ATaskHandle {
+  task_id: string;
+  agent_id: string;
+  status: string;
+  created_at?: string;
+  started_at?: string | null;
+  completed_at?: string | null;
+  result?: Record<string, unknown>;
+  error?: string | null;
+  metadata?: Record<string, unknown>;
+}
+
+export interface JobResponse {
+  job_id: string;
+  status: string;
+  result?: Record<string, unknown>;
+  error?: string;
+  created_at?: string;
+  completed_at?: string;
+}
+
+export interface JobListResponse {
+  jobs: JobResponse[];
+  total: number;
+  limit: number;
+}
+
+export interface JobStatsResponse {
+  total_jobs: number;
+  status_counts: Record<string, number>;
+  redis_connected: boolean;
+  error?: string;
+}
+
 // ── Helpers ────────────────────────────────────────────────────────
 
 function buildHeaders(includeJson: boolean, extra?: HeadersInit): Headers {
@@ -477,4 +582,103 @@ export async function getActiveContext(): Promise<any> {
 
 export async function clearActiveContext(): Promise<any> {
   return api("/context/clear", { method: "POST" });
+}
+
+// ── Memory Layer Endpoints ─────────────────────────────────────────
+
+export async function listMemorySessions(): Promise<MemorySessionListResponse> {
+  return api("/memory/sessions");
+}
+
+export async function getSessionTranscript(
+  sessionId: string,
+  limit: number = 50
+): Promise<SessionTranscriptResponse> {
+  return api(`/memory/sessions/${encodeURIComponent(sessionId)}?limit=${limit}`);
+}
+
+export async function getMemoryBootstrap(): Promise<MemoryBootstrapResponse> {
+  return api("/memory/bootstrap");
+}
+
+export async function getCompactionHistory(
+  sessionId?: string
+): Promise<MemoryCompactionResponse> {
+  const suffix = sessionId ? `?session_id=${encodeURIComponent(sessionId)}` : "";
+  return api(`/memory/compaction/history${suffix}`);
+}
+
+export async function searchMemoryLayers(
+  query: string,
+  k: number = 10
+): Promise<MemorySearchResponse> {
+  return api(`/memory/search?query=${encodeURIComponent(query)}&k=${k}`, {
+    method: "POST",
+  });
+}
+
+// ── Telegram ───────────────────────────────────────────────────────
+
+export async function getTelegramConfig(): Promise<TelegramConfig> {
+  return api("/telegram/config");
+}
+
+export async function updateTelegramConfig(payload: {
+  bot_token?: string;
+  dm_policy: "pairing" | "allowlist" | "open";
+}): Promise<{ status: string; dm_policy: string; message: string }> {
+  return api("/telegram/config", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function listTelegramUsers(): Promise<{ users: TelegramUser[]; count: number }> {
+  return api("/telegram/users");
+}
+
+export async function listPendingTelegramUsers(): Promise<{ pending_users: TelegramUser[]; count: number }> {
+  return api("/telegram/users/pending");
+}
+
+export async function approveTelegramUser(
+  telegramId: string
+): Promise<{ status: string; telegram_id: string }> {
+  return api(`/telegram/users/${encodeURIComponent(telegramId)}/approve`, {
+    method: "POST",
+  });
+}
+
+export async function sendTelegramTestMessage(): Promise<{ status: string; message: string }> {
+  return api("/telegram/test", { method: "POST" });
+}
+
+// ── A2A Agents ─────────────────────────────────────────────────────
+
+export async function listA2AAgents(): Promise<{ agents: A2AAgentCard[]; count: number }> {
+  return api("/agents/a2a/list");
+}
+
+export async function delegateA2ATask(
+  agentId: string,
+  task: Record<string, unknown>
+): Promise<{ task_id: string; agent_id: string; status: string }> {
+  return api(`/agents/a2a/${encodeURIComponent(agentId)}/delegate`, {
+    method: "POST",
+    body: JSON.stringify(task),
+  });
+}
+
+export async function getA2ATaskStatus(taskId: string): Promise<A2ATaskHandle> {
+  return api(`/agents/a2a/task/${encodeURIComponent(taskId)}`);
+}
+
+// ── Jobs ───────────────────────────────────────────────────────────
+
+export async function listJobs(limit: number = 50): Promise<JobListResponse> {
+  return api(`/jobs/list?limit=${limit}`);
+}
+
+export async function getJobStats(): Promise<JobStatsResponse> {
+  return api("/jobs/stats");
 }

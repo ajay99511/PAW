@@ -11,35 +11,40 @@
 
 import { useState, useEffect } from "react";
 import { useMemories, useMemoryHealth } from "../lib/hooks";
+import {
+  listMemorySessions,
+  getSessionTranscript,
+  getMemoryBootstrap,
+  getCompactionHistory,
+  searchMemoryLayers,
+  type MemoryBootstrapResponse,
+  type MemoryCompactionResponse,
+  type MemorySearchResponse,
+  type SessionTranscriptEntry,
+} from "../lib/api";
 
 type MemoryTab = 'facts' | 'sessions' | 'bootstrap' | 'compaction' | 'search';
 
 interface Session {
   session_id: string;
-  entries?: any[];
+  entries?: SessionTranscriptEntry[];
   count?: number;
-}
-
-interface BootstrapSummary {
-  files: Record<string, { exists: boolean; chars?: number }>;
-  total_files: number;
-  total_chars: number;
 }
 
 export default function MemoryPage() {
   const [activeTab, setActiveTab] = useState<MemoryTab>('facts');
   const [sessions, setSessions] = useState<Session[]>([]);
   const [selectedSession, setSelectedSession] = useState<string | null>(null);
-  const [sessionTranscript, setSessionTranscript] = useState<any[]>([]);
-  const [bootstrapData, setBootstrapData] = useState<any>(null);
-  const [compactionData, setCompactionData] = useState<any>(null);
+  const [sessionTranscript, setSessionTranscript] = useState<SessionTranscriptEntry[]>([]);
+  const [bootstrapData, setBootstrapData] = useState<MemoryBootstrapResponse | null>(null);
+  const [compactionData, setCompactionData] = useState<MemoryCompactionResponse | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
-  const [searchResults, setSearchResults] = useState<any>(null);
+  const [searchResults, setSearchResults] = useState<MemorySearchResponse | null>(null);
   const [loading, setLoading] = useState(false);
 
   // Use existing hooks for Mem0 facts
   const { data: memoriesData, isLoading: memoriesLoading } = useMemories();
-  const { data: healthData } = useMemoryHealth();
+  useMemoryHealth();
 
   // Load sessions
   useEffect(() => {
@@ -65,9 +70,11 @@ export default function MemoryPage() {
   const loadSessions = async () => {
     setLoading(true);
     try {
-      const response = await fetch('http://127.0.0.1:8000/memory/sessions');
-      const data = await response.json();
-      setSessions(data.sessions || []);
+      const data = await listMemorySessions();
+      const sessionItems = Array.isArray(data.sessions)
+        ? data.sessions.map((sessionId) => ({ session_id: sessionId }))
+        : [];
+      setSessions(sessionItems);
     } catch (err) {
       console.error('Failed to load sessions:', err);
     } finally {
@@ -78,8 +85,7 @@ export default function MemoryPage() {
   const loadSessionTranscript = async (sessionId: string) => {
     setLoading(true);
     try {
-      const response = await fetch(`http://127.0.0.1:8000/memory/sessions/${encodeURIComponent(sessionId)}?limit=50`);
-      const data = await response.json();
+      const data = await getSessionTranscript(sessionId, 50);
       setSessionTranscript(data.entries || []);
       setSelectedSession(sessionId);
     } catch (err) {
@@ -92,8 +98,7 @@ export default function MemoryPage() {
   const loadBootstrapFiles = async () => {
     setLoading(true);
     try {
-      const response = await fetch('http://127.0.0.1:8000/memory/bootstrap');
-      const data = await response.json();
+      const data = await getMemoryBootstrap();
       setBootstrapData(data);
     } catch (err) {
       console.error('Failed to load bootstrap files:', err);
@@ -105,8 +110,7 @@ export default function MemoryPage() {
   const loadCompactionHistory = async () => {
     setLoading(true);
     try {
-      const response = await fetch('http://127.0.0.1:8000/memory/compaction/history');
-      const data = await response.json();
+      const data = await getCompactionHistory();
       setCompactionData(data);
     } catch (err) {
       console.error('Failed to load compaction history:', err);
@@ -121,8 +125,7 @@ export default function MemoryPage() {
 
     setLoading(true);
     try {
-      const response = await fetch(`http://127.0.0.1:8000/memory/search?query=${encodeURIComponent(searchQuery)}&k=10`);
-      const data = await response.json();
+      const data = await searchMemoryLayers(searchQuery, 10);
       setSearchResults(data);
     } catch (err) {
       console.error('Failed to search:', err);

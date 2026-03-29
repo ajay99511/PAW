@@ -5,34 +5,20 @@
  */
 
 import { useState, useEffect } from "react";
-
-interface AgentCard {
-  agent_id: string;
-  name: string;
-  description: string;
-  capabilities: string[];
-  permissions: {
-    read: string[];
-    write: string[];
-    execute: boolean;
-  };
-  enabled: boolean;
-}
-
-interface TaskResult {
-  task_id: string;
-  agent_id: string;
-  status: string;
-  result?: any;
-  error?: string;
-}
+import {
+  listA2AAgents,
+  delegateA2ATask,
+  getA2ATaskStatus,
+  type A2AAgentCard,
+  type A2ATaskHandle,
+} from "../../lib/api";
 
 export default function A2AAgentsTab() {
-  const [agents, setAgents] = useState<AgentCard[]>([]);
+  const [agents, setAgents] = useState<A2AAgentCard[]>([]);
   const [loading, setLoading] = useState(false);
   const [selectedAgent, setSelectedAgent] = useState<string | null>(null);
   const [taskInput, setTaskInput] = useState("");
-  const [taskResult, setTaskResult] = useState<TaskResult | null>(null);
+  const [taskResult, setTaskResult] = useState<A2ATaskHandle | null>(null);
   const [delegating, setDelegating] = useState(false);
 
   useEffect(() => {
@@ -42,8 +28,7 @@ export default function A2AAgentsTab() {
   const loadAgents = async () => {
     setLoading(true);
     try {
-      const response = await fetch('http://127.0.0.1:8000/agents/a2a/list');
-      const data = await response.json();
+      const data = await listA2AAgents();
       setAgents(data.agents || []);
     } catch (err) {
       console.error('Failed to load A2A agents:', err);
@@ -59,20 +44,10 @@ export default function A2AAgentsTab() {
     setTaskResult(null);
     
     try {
-      const response = await fetch(`http://127.0.0.1:8000/agents/a2a/${encodeURIComponent(agentId)}/delegate`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          path: taskInput,
-          focus: 'all',
-        }),
+      const result = await delegateA2ATask(agentId, {
+        path: taskInput,
+        focus: 'all',
       });
-      
-      if (!response.ok) {
-        throw new Error('Failed to delegate task');
-      }
-      
-      const result = await response.json();
       setTaskResult(result);
       
       // Poll for task completion
@@ -93,8 +68,7 @@ export default function A2AAgentsTab() {
   const pollTaskStatus = async (taskId: string) => {
     const poll = async () => {
       try {
-        const response = await fetch(`http://127.0.0.1:8000/agents/a2a/task/${encodeURIComponent(taskId)}`);
-        const data = await response.json();
+        const data = await getA2ATaskStatus(taskId);
         
         setTaskResult(data);
         

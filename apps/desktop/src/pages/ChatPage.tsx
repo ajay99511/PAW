@@ -8,12 +8,12 @@
 import { useState, useRef, useEffect } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
     chatSmart,
     chatPlain,
     chatStream,
     chatSmartStream,
+    getChatThread,
     getActiveContext,
     clearActiveContext,
     type ChatThread,
@@ -32,8 +32,6 @@ interface Message {
 }
 
 export default function ChatPage() {
-    const queryClient = useQueryClient();
-    
     // Use TanStack Query hooks
     const { data: modelsData } = useModels();
     const { data: activeModelData } = useActiveModel();
@@ -101,8 +99,7 @@ export default function ChatPage() {
         if (loading) return;
         setLoading(true);
         try {
-            const response = await fetch(`http://127.0.0.1:8000/chat/threads/${encodeURIComponent(threadId)}`);
-            const detail = await response.json();
+            const detail = await getChatThread(threadId);
             const mappedMessages: Message[] = detail.messages.map((m: any) => ({
                 id: m.id,
                 role: m.role,

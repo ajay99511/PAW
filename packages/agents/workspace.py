@@ -126,6 +126,14 @@ class WorkspaceManager:
         '**/hiberfil.sys',
         '**/swapfile.sys',
     ]
+
+    DANGEROUS_PREFIXES = [
+        "c:/windows",
+        "c:/$recycle.bin",
+        "c:/system volume information",
+        "c:/program files",
+        "c:/program files (x86)",
+    ]
     
     def __init__(self, config: WorkspaceConfig):
         """
@@ -159,6 +167,20 @@ class WorkspaceManager:
             # Resolve to absolute path
             resolved_path = path.resolve()
             path_str = str(resolved_path).replace('\\', '/')
+            normalized = path_str.lower().rstrip("/")
+            root_resolved = self.config.root.resolve()
+            root_str = str(root_resolved).replace("\\", "/").lower().rstrip("/")
+
+            # Explicit prefix checks for critical Windows/system paths.
+            for prefix in self.DANGEROUS_PREFIXES:
+                if normalized == prefix or normalized.startswith(prefix + "/"):
+                    return False, f"Matches dangerous path prefix: {prefix}"
+
+            # Explicit checks for high-value secret locations.
+            sensitive_markers = ["/.ssh/", "/.aws/", "/.azure/", "/.env"]
+            for marker in sensitive_markers:
+                if marker in normalized or normalized.endswith(marker.rstrip("/")):
+                    return False, f"Matches dangerous path marker: {marker}"
             
             # Check against dangerous patterns
             for pattern in self.DANGEROUS_PATTERNS:
@@ -169,12 +191,12 @@ class WorkspaceManager:
             if '..' in str(path):
                 return False, "Path traversal detected"
             
-            # Check if path is under root (for non-absolute paths)
-            if not path.is_absolute():
-                try:
-                    resolved_path.relative_to(self.config.root.resolve())
-                except ValueError:
-                    return False, "Path outside workspace root"
+            # Enforce workspace root boundary for both relative and absolute paths.
+            try:
+                resolved_path.relative_to(root_resolved)
+            except ValueError:
+                # If neither dangerous nor in-root, deny as outside root.
+                return False, "Path outside workspace root"
             
             return True, "Safe"
         
@@ -205,7 +227,27 @@ class WorkspaceManager:
             path_str = str(rel_path).replace('\\', '/')
             
             for pattern in patterns:
-                if fnmatch.fnmatch(path_str, pattern):
+                normalized_pattern = pattern.replace("\\", "/")
+
+                if fnmatch.fnmatch(path_str, normalized_pattern):
+                    return True
+                if Path(path_str).match(normalized_pattern):
+                    return True
+
+                # Support common "src/**/*" intent for files directly under "src/".
+                if "/**/*" in normalized_pattern:
+                    alt_patterns = [
+                        normalized_pattern.replace("/**/*", "/**"),
+                        normalized_pattern.replace("/**/*", "/*"),
+                    ]
+                    if any(
+                        fnmatch.fnmatch(path_str, alt) or Path(path_str).match(alt)
+                        for alt in alt_patterns
+                    ):
+                        return True
+
+                # Also allow exact file match for strict patterns.
+                if normalized_pattern.rstrip("/") == path_str:
                     return True
             
             return False
@@ -232,7 +274,7 @@ class WorkspaceManager:
         # Check read allowlist
         if self._matches_pattern(path, self.config.permissions.read):
             self._audit('read', path, True, "Matches read allowlist")
-            return True, "Allowed"
+            return True, "Matches read allowlist"
         
         reason = "Path not in read allowlist"
         self._audit('read', path, False, reason)
@@ -257,7 +299,7 @@ class WorkspaceManager:
         # Check write allowlist
         if self._matches_pattern(path, self.config.permissions.write):
             self._audit('write', path, True, "Matches write allowlist")
-            return True, "Allowed"
+            return True, "Matches write allowlist"
         
         reason = "Path not in write allowlist"
         self._audit('write', path, False, reason)

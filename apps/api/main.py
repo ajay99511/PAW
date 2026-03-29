@@ -52,6 +52,13 @@ async def lifespan(app: FastAPI):
         setup_jobs(scheduler)
     except Exception as e:
         logger.error(f"Failed to setup background jobs: {e}")
+
+    # Register built-in A2A agents so discovery/delegation works after startup.
+    try:
+        from packages.agents.a2a import register_tier1_agents
+        register_tier1_agents()
+    except Exception as e:
+        logger.error(f"Failed to register A2A agents: {e}")
     yield
     # Shutdown
     logger.info("Shutting down PersonalAssist API...")
@@ -1203,7 +1210,6 @@ async def serve_test_page():
 async def serve_prototype():
     """Serve the full prototype test page."""
     return FileResponse(_STATIC_DIR / "test_prototype.html")
-
 
 
 

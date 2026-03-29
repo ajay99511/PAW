@@ -6,9 +6,9 @@ import { useState, useEffect } from "react";
 import {
   listWorkspaces,
   createWorkspace,
-  updateWorkspace,
   deleteWorkspace,
   getAuditLog,
+  checkPermission,
   type Workspace,
   type AuditLogEntry,
 } from "../lib/workspace-api";
@@ -130,23 +130,10 @@ export default function WorkspacePage() {
 
     setTestingPermission(true);
     try {
-      const response = await fetch(
-        `http://127.0.0.1:8000/workspaces/${encodeURIComponent(selectedWorkspace.project_id)}/check-permission`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            path: permissionTest.path,
-            action: permissionTest.action,
-          }),
-        }
-      );
-
-      if (!response.ok) {
-        throw new Error('Failed to test permission');
-      }
-
-      const result = await response.json();
+      const result = await checkPermission(selectedWorkspace.project_id, {
+        path: permissionTest.path,
+        action: permissionTest.action,
+      });
       setPermissionTest(prev => ({ ...prev, result }));
     } catch (err) {
       alert(`Error: ${err instanceof Error ? err.message : 'Unknown error'}`);

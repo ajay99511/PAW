@@ -10,20 +10,16 @@
  */
 
 import { useState, useEffect } from "react";
-
-interface TelegramConfig {
-  bot_token_set: boolean;
-  dm_policy: 'pairing' | 'allowlist' | 'open';
-  bot_username: string | null;
-}
-
-interface TelegramUser {
-  telegram_id: string;
-  user_id: string;
-  approved: boolean;
-  created_at: string;
-  last_message_at: string | null;
-}
+import {
+  getTelegramConfig,
+  updateTelegramConfig,
+  listPendingTelegramUsers,
+  listTelegramUsers,
+  approveTelegramUser,
+  sendTelegramTestMessage,
+  type TelegramConfig,
+  type TelegramUser,
+} from "../lib/api";
 
 export default function TelegramPage() {
   const [config, setConfig] = useState<TelegramConfig | null>(null);
@@ -31,7 +27,6 @@ export default function TelegramPage() {
   const [dmPolicy, setDmPolicy] = useState<'pairing' | 'allowlist' | 'open'>('pairing');
   const [pendingUsers, setPendingUsers] = useState<TelegramUser[]>([]);
   const [connectedUsers, setConnectedUsers] = useState<TelegramUser[]>([]);
-  const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [testMessageStatus, setTestMessageStatus] = useState<string | null>(null);
 
@@ -43,8 +38,7 @@ export default function TelegramPage() {
 
   const loadConfig = async () => {
     try {
-      const response = await fetch('http://127.0.0.1:8000/telegram/config');
-      const data = await response.json();
+      const data = await getTelegramConfig();
       setConfig(data);
       setDmPolicy(data.dm_policy || 'pairing');
     } catch (err) {
@@ -54,8 +48,7 @@ export default function TelegramPage() {
 
   const loadPendingUsers = async () => {
     try {
-      const response = await fetch('http://127.0.0.1:8000/telegram/users/pending');
-      const data = await response.json();
+      const data = await listPendingTelegramUsers();
       setPendingUsers(data.pending_users || []);
     } catch (err) {
       console.error('Failed to load pending users:', err);
@@ -64,9 +57,8 @@ export default function TelegramPage() {
 
   const loadConnectedUsers = async () => {
     try {
-      const response = await fetch('http://127.0.0.1:8000/telegram/users');
-      const data = await response.json();
-      setConnectedUsers(data.users?.filter((u: any) => u.approved) || []);
+      const data = await listTelegramUsers();
+      setConnectedUsers(data.users?.filter((u) => u.approved) || []);
     } catch (err) {
       console.error('Failed to load connected users:', err);
     }
@@ -75,20 +67,10 @@ export default function TelegramPage() {
   const handleSaveConfig = async () => {
     setSaving(true);
     try {
-      const response = await fetch('http://127.0.0.1:8000/telegram/config', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          bot_token: botToken,
-          dm_policy: dmPolicy,
-        }),
+      const result = await updateTelegramConfig({
+        bot_token: botToken,
+        dm_policy: dmPolicy,
       });
-      
-      if (!response.ok) {
-        throw new Error('Failed to save configuration');
-      }
-      
-      const result = await response.json();
       alert(result.message || 'Configuration saved!');
       loadConfig();
     } catch (err) {
@@ -100,14 +82,7 @@ export default function TelegramPage() {
 
   const handleApproveUser = async (telegramId: string) => {
     try {
-      const response = await fetch(`http://127.0.0.1:8000/telegram/users/${encodeURIComponent(telegramId)}/approve`, {
-        method: 'POST',
-      });
-      
-      if (!response.ok) {
-        throw new Error('Failed to approve user');
-      }
-      
+      await approveTelegramUser(telegramId);
       loadPendingUsers();
       loadConnectedUsers();
       alert('User approved successfully!');
@@ -119,11 +94,7 @@ export default function TelegramPage() {
   const handleTestMessage = async () => {
     setTestMessageStatus('Sending...');
     try {
-      const response = await fetch('http://127.0.0.1:8000/telegram/test', {
-        method: 'POST',
-      });
-      
-      const result = await response.json();
+      const result = await sendTelegramTestMessage();
       setTestMessageStatus(result.message);
     } catch (err) {
       setTestMessageStatus(`Error: ${err instanceof Error ? err.message : 'Failed to send test message'}`);

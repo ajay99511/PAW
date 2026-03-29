@@ -43,12 +43,11 @@ async def run_daily_briefing(ctx: dict[str, Any]) -> dict[str, Any]:
             user_message=(
                 "Generate a morning briefing of recent activity. "
                 "Check for pending background tasks, verify system health, "
-                "and summarize overnight updates."
+                "and summarize overnight updates. "
+                f"Briefing date: {datetime.now().strftime('%Y-%m-%d')}."
             ),
             user_id="default",
             model="local",
-            session_type="isolated",
-            session_id=f"daily_briefing:{datetime.now().strftime('%Y-%m-%d')}",
         )
         
         logger.info(f"Daily briefing completed: {result.get('response', '')[:100]}...")

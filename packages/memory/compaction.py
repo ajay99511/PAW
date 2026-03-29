@@ -204,7 +204,6 @@ async def memory_flush_turn(session_id: str, model: str = "local") -> None:
             ),
             user_id=session_id.split("_")[0],  # Extract user_id from session_id
             model=model,
-            session_type="silent",
         )
         
         logger.debug(f"Memory flush completed: {result.get('response', '')[:100]}")

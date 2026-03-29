@@ -59,9 +59,15 @@ function buildHeaders(): Headers {
 }
 
 async function api<T>(path: string, options?: RequestInit): Promise<T> {
+  const headers = buildHeaders();
+  if (options?.headers) {
+    const extraHeaders = new Headers(options.headers);
+    extraHeaders.forEach((value, key) => headers.set(key, value));
+  }
+
   const res = await fetch(`${API_BASE}${path}`, {
     ...options,
-    headers: buildHeaders(),
+    headers,
   });
   
   if (!res.ok) {
@@ -69,7 +75,7 @@ async function api<T>(path: string, options?: RequestInit): Promise<T> {
     throw new Error(`API error ${res.status}: ${err}`);
   }
   
-  return res.json();
+  return res.json() as Promise<T>;
 }
 
 // ── Workspace Endpoints ────────────────────────────────────────────
@@ -109,7 +115,9 @@ export async function getAuditLog(
   projectId: string,
   limit: number = 100,
 ): Promise<AuditLogEntry[]> {
-  const data = await api(`/workspaces/${encodeURIComponent(projectId)}/audit?limit=${limit}`);
+  const data = await api<{ entries: AuditLogEntry[] }>(
+    `/workspaces/${encodeURIComponent(projectId)}/audit?limit=${limit}`
+  );
   return data.entries || [];
 }
 
@@ -123,6 +131,6 @@ export async function checkPermission(
   });
 }
 
-export async function getWorkspaceStats(projectId: string): Promise<any> {
+export async function getWorkspaceStats(projectId: string): Promise<Record<string, unknown>> {
   return api(`/workspaces/${encodeURIComponent(projectId)}/stats`);
 }

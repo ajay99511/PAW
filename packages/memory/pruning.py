@@ -22,6 +22,7 @@ Usage:
 """
 
 import logging
+import math
 from datetime import datetime, timedelta
 from typing import Any
 
@@ -59,36 +60,42 @@ async def prune_messages(
     now = datetime.now()
     pruned = []
     tool_result_count = 0
-    
-    # Separate protected and prunable messages
-    protected_count = min(protect_last_n, len(messages))
-    to_prune = messages[:-protected_count] if protected_count < len(messages) else messages
-    protected = messages[-protected_count:] if protected_count > 0 else []
-    
-    # Prune old tool results in non-protected messages
-    for msg in to_prune:
+
+    # Protect the last N non-tool messages.
+    # Tool results are always eligible for TTL pruning.
+    protected_indices: set[int] = set()
+    remaining_to_protect = max(0, protect_last_n)
+    for idx in range(len(messages) - 1, -1, -1):
+        if remaining_to_protect <= 0:
+            break
+        if messages[idx].get("role") != "tool":
+            protected_indices.add(idx)
+            remaining_to_protect -= 1
+
+    for idx, msg in enumerate(messages):
         if msg.get("role") == "tool":
-            # Check TTL
             msg_time = _get_message_timestamp(msg)
             if msg_time:
                 age = (now - msg_time).total_seconds()
                 if age > ttl_seconds:
-                    # Replace with placeholder
-                    pruned.append({
-                        "role": "tool",
-                        "content": "[Old tool result content cleared]",
-                    })
+                    pruned.append(
+                        {
+                            "role": "tool",
+                            "content": "[Old tool result content cleared]",
+                        }
+                    )
                     tool_result_count += 1
                 else:
                     pruned.append(msg)
             else:
-                # No timestamp, keep it
                 pruned.append(msg)
+            continue
+
+        # Protected non-tool messages are always preserved as-is.
+        if idx in protected_indices:
+            pruned.append(msg)
         else:
             pruned.append(msg)
-    
-    # Add protected messages (these are never pruned)
-    pruned.extend(protected)
     
     # Apply token limit if specified
     if max_tokens:
@@ -198,19 +205,23 @@ def _estimate_tokens(messages: list[dict[str, Any]]) -> int:
     for msg in messages:
         # Count content
         content = msg.get("content", "")
+        message_chars = 0
         if isinstance(content, str):
-            total_chars += len(content)
+            message_chars += len(content)
         elif isinstance(content, (dict, list)):
-            total_chars += len(str(content))
+            message_chars += len(str(content))
         
         # Count role and other fields
-        total_chars += len(msg.get("role", ""))
+        message_chars += len(msg.get("role", ""))
         for key, value in msg.items():
             if key != "content" and isinstance(value, str):
-                total_chars += len(value)
+                message_chars += len(value)
+
+        # Add per-message structural overhead (JSON keys/metadata/separators).
+        total_chars += message_chars + 16
     
-    # Rough estimation: 1 token ≈ 4 chars
-    return total_chars // 4
+    # Rough estimation: 1 token ≈ 4 chars, but never return 0 for non-empty input.
+    return max(1, math.ceil(total_chars / 4))
 
 
 async def soft_trim(

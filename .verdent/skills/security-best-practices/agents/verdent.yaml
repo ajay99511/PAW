@@ -1,0 +1,6 @@
+interface:
+  display_name: 'Security Best Practices'
+  short_description: 'Security reviews and secure-by-default guidance'
+  icon_dark: './assets/icon-dark.png'
+  icon_light: './assets/icon-light.png'
+  default_prompt: 'Review this code for security best practices.'

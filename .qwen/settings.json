@@ -10,7 +10,11 @@
       "Bash(.venv\\scripts\\pip *)",
       "Bash(.venv\\scripts\\python *)",
       "Bash(curl *)",
-      "Bash(python *)"
+      "Bash(python *)",
+      "Bash(.\\.venv\\scripts\\python.exe *)",
+      "Bash(convertfrom-json)",
+      "Bash(select-object *)",
+      "Bash(npm audit *)"
     ]
   },
   "$version": 3

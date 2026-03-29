@@ -4,13 +4,30 @@ All settings are loaded from environment variables via .env file.
 """
 
 import os
+import sys
 
 from dotenv import load_dotenv
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-# Load .env from project root
-load_dotenv(os.path.join(os.path.dirname(__file__), "..", "..", ".env"))
+
+def _should_load_project_dotenv() -> bool:
+    """
+    Avoid loading local .env during pytest runs.
+
+    Unit tests should be deterministic and not depend on developer-local
+    environment files.
+    """
+    if os.getenv("PYTEST_CURRENT_TEST"):
+        return False
+    if any("pytest" in arg.lower() for arg in sys.argv):
+        return False
+    return True
+
+
+# Load .env from project root (except during pytest)
+if _should_load_project_dotenv():
+    load_dotenv(os.path.join(os.path.dirname(__file__), "..", "..", ".env"))
 
 
 class Settings(BaseSettings):
