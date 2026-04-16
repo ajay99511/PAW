@@ -120,11 +120,11 @@ async def search_user_memories(
     user_id: str = "default",
     limit: int = 5,
 ) -> list[dict[str, Any]]:
-    """Search Mem0 for user-related facts and preferences."""
+    """Search local long-term memory for user-related facts and preferences."""
     try:
         from packages.memory.mem0_client import mem0_search
 
-        results = mem0_search(query, user_id=user_id, limit=limit)
+        results = await asyncio.to_thread(mem0_search, query, user_id, limit)
         return results
     except Exception as exc:
         logger.warning("Memory search failed: %s", exc)
@@ -438,7 +438,7 @@ TOOL_REGISTRY: dict[str, dict[str, Any]] = {
         "fn": search_user_memories,
         "category": "memory",
         "risk": TOOL_RISK_READ,
-        "description": "Search for user-related facts/preferences in Mem0",
+        "description": "Search for user-related facts/preferences in local long-term memory",
         "schema": {
             "type": "function",
             "function": {

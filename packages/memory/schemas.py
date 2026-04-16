@@ -40,7 +40,7 @@ class MemorySearchResult(BaseModel):
 
 
 class Mem0Memory(BaseModel):
-    """A Mem0 memory entry for API responses."""
+    """Legacy response shape for long-term memory API compatibility."""
     id: str
     memory: str
     user_id: str = "default"

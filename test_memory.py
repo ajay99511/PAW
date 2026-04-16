@@ -1,7 +1,7 @@
 """Manual memory smoke test script.
 
 Kept as a utility, but skipped in automated pytest runs because it depends on
-external services (Mem0/Qdrant/Ollama) and user environment.
+external local services (Qdrant/Ollama) and user environment.
 """
 
 import asyncio

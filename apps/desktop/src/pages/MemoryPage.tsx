@@ -2,7 +2,7 @@
  * Memory Page - Expanded to show all 5 layers
  * 
  * Tabs:
- * - Facts (Mem0) - User-centric facts
+ * - Facts (Local Memory) - User-centric facts
  * - Sessions - JSONL session transcripts
  * - Bootstrap - Bootstrap files viewer
  * - Compaction - Compaction history
@@ -42,7 +42,7 @@ export default function MemoryPage() {
   const [searchResults, setSearchResults] = useState<MemorySearchResponse | null>(null);
   const [loading, setLoading] = useState(false);
 
-  // Use existing hooks for Mem0 facts
+  // Use existing hooks for local memory facts
   const { data: memoriesData, isLoading: memoriesLoading } = useMemories();
   useMemoryHealth();
 
@@ -157,7 +157,7 @@ export default function MemoryPage() {
     return (
       <div>
         <div style={{ marginBottom: '16px' }}>
-          <h3 style={{ margin: '0 0 8px 0' }}>Mem0 Facts</h3>
+          <h3 style={{ margin: '0 0 8px 0' }}>Local Memory Facts</h3>
           <p style={{ fontSize: '13px', color: 'var(--text-muted)', margin: 0 }}>
             User-centric facts extracted from conversations
           </p>

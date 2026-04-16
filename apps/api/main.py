@@ -721,7 +721,7 @@ async def memory_query(req: MemoryQueryRequest):
 @app.get("/memory/all")
 async def memory_all(user_id: str = "default"):
     """
-    List all Mem0 memories for a user.
+    List all long-term memories for a user.
 
     Provides transparency into what the system has learned.
     """
@@ -824,7 +824,7 @@ async def get_compaction_history(session_id: str | None = None):
 
 @app.post("/memory/search")
 async def search_ltm(query: str, k: int = 10):
-    """Search across all memory layers (Mem0 + Qdrant)."""
+    """Search across all memory layers (local memory + Qdrant)."""
     try:
         from packages.memory.memory_service import build_context
         
@@ -1076,7 +1076,7 @@ async def send_test_message():
 @app.post("/memory/forget")
 async def memory_forget(req: ForgetRequest):
     """
-    Delete a specific Mem0 memory by ID.
+    Delete a specific stored memory by ID.
 
     Allows users to correct or remove learned facts.
     """
@@ -1272,7 +1272,6 @@ async def serve_test_page():
 async def serve_prototype():
     """Serve the full prototype test page."""
     return FileResponse(_STATIC_DIR / "test_prototype.html")
-
 
 
 

@@ -1,5 +1,5 @@
 """
-Memory Consolidation — periodic review and deduplication of Mem0 memories.
+Memory Consolidation — periodic review and deduplication of local memories.
 
 After N conversation turns, the system auto-reviews all stored memories
 and asks the LLM to consolidate them: merge duplicates, flag stale facts,
@@ -87,7 +87,7 @@ async def consolidate_memories(
     model: str = "local",
 ) -> dict[str, Any]:
     """
-    Review and consolidate all Mem0 memories for a user.
+    Review and consolidate all local memories for a user.
 
     Uses the LLM to identify duplicates, resolve contradictions,
     and produce a cleaner memory set.

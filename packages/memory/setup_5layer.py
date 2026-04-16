@@ -77,18 +77,18 @@ async def validate_qdrant_connection() -> bool:
 
 
 async def validate_mem0_connection() -> bool:
-    """Validate Mem0 connection."""
+    """Validate local memory connection."""
     from packages.memory.mem0_client import mem0_get_all
     
-    logger.info("Checking Mem0 connection...")
+    logger.info("Checking local memory connection...")
     
     try:
-        # Try to get all memories (should work if Mem0 is configured)
+        # Try to list memories from the local memory layer.
         memories = mem0_get_all(user_id="default")
-        logger.info(f"  ✓ Mem0 connected, {len(memories)} memories found")
+        logger.info(f"  ✓ Local memory connected, {len(memories)} memories found")
         return True
     except Exception as exc:
-        logger.error(f"  ✗ Mem0 connection failed: {exc}")
+        logger.error(f"  ✗ Local memory connection failed: {exc}")
         return False
 
 
@@ -176,7 +176,7 @@ async def run_health_checks() -> dict:
     # Test Qdrant
     results["qdrant"] = await validate_qdrant_connection()
     
-    # Test Mem0
+    # Test local memory layer
     results["mem0"] = await validate_mem0_connection()
     
     # Test redaction

@@ -219,7 +219,7 @@ You are a helpful, harmless, and honest AI assistant. Your goal is to assist the
 
 ## Project Context
 - Currently working on: PersonalAssist AI system
-- Tech stack: FastAPI, Tauri, React, Qdrant, Mem0
+- Tech stack: FastAPI, Tauri, React, Qdrant, local memory extractor
 - Goals: Build a production-grade local AI assistant
 
 ## Important Notes

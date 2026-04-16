@@ -15,10 +15,7 @@ litellm>=1.60.0
 qdrant-client>=1.13.0
 
 # === Memory Layer ===
-mem0ai>=0.1.60
-
-# === Embedding support (for local embeddings via sentence-transformers) ===
-sentence-transformers>=3.4.0
+# Local memory extraction and storage run on Ollama + Qdrant only.
 
 # === PDF Parsing ===
 pymupdf>=1.25.0

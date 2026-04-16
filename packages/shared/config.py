@@ -76,15 +76,125 @@ class Settings(BaseSettings):
     # --- Qdrant ---
     qdrant_host: str = Field(default="localhost", alias="QDRANT_HOST")
     qdrant_port: int = Field(default=6333, alias="QDRANT_PORT")
+    qdrant_url: str = Field(
+        default="",
+        alias="QDRANT_URL",
+        description="Optional full Qdrant URL (overrides host/port when set)",
+    )
+    qdrant_api_key: str = Field(
+        default="",
+        alias="QDRANT_API_KEY",
+        description="Optional Qdrant API key for authenticated instances",
+    )
     qdrant_collection: str = Field(
         default="personal_memories", alias="QDRANT_COLLECTION"
     )
 
-    # --- Mem0 ---
+    # --- Local Memory (legacy env alias retained) ---
     mem0_collection: str = Field(
         default="mem0_memories",
         alias="MEM0_COLLECTION",
-        description="Qdrant collection name for Mem0 memories",
+        description="Legacy alias for memory collection name (local memory now uses Qdrant directly)",
+    )
+    local_memory_collection: str = Field(
+        default="",
+        alias="LOCAL_MEMORY_COLLECTION",
+        description="Optional override for local long-term memory collection (falls back to MEM0_COLLECTION/QDRANT_COLLECTION)",
+    )
+    local_memory_vector_dim: int = Field(
+        default=768,
+        alias="LOCAL_MEMORY_VECTOR_DIM",
+        description="Embedding vector dimension for local memory collection",
+    )
+    local_memory_min_confidence: float = Field(
+        default=0.50,
+        alias="LOCAL_MEMORY_MIN_CONFIDENCE",
+        description="Minimum confidence threshold to persist extracted memories",
+    )
+    local_memory_semantic_dedupe_threshold: float = Field(
+        default=0.92,
+        alias="LOCAL_MEMORY_SEMANTIC_DEDUPE_THRESHOLD",
+        description="Semantic similarity threshold for near-duplicate memory suppression",
+    )
+    local_memory_dedupe_probe_limit: int = Field(
+        default=6,
+        alias="LOCAL_MEMORY_DEDUPE_PROBE_LIMIT",
+        description="How many nearest neighbors to inspect for semantic dedupe checks",
+    )
+    local_memory_max_extract_per_add: int = Field(
+        default=6,
+        alias="LOCAL_MEMORY_MAX_EXTRACT_PER_ADD",
+        description="Maximum candidate memories extracted from a single add call",
+    )
+    local_memory_max_chars: int = Field(
+        default=260,
+        alias="LOCAL_MEMORY_MAX_CHARS",
+        description="Maximum character length per persisted memory fact",
+    )
+    local_memory_embedding_cache_size: int = Field(
+        default=1024,
+        alias="LOCAL_MEMORY_EMBEDDING_CACHE_SIZE",
+        description="LRU cache size for local embedding vectors",
+    )
+    local_memory_query_cache_size: int = Field(
+        default=256,
+        alias="LOCAL_MEMORY_QUERY_CACHE_SIZE",
+        description="LRU cache size for memory search query responses",
+    )
+    local_memory_query_cache_ttl_seconds: int = Field(
+        default=20,
+        alias="LOCAL_MEMORY_QUERY_CACHE_TTL_SECONDS",
+        description="TTL for cached memory search responses",
+    )
+    local_memory_search_ef: int = Field(
+        default=96,
+        alias="LOCAL_MEMORY_SEARCH_EF",
+        description="HNSW ef parameter used at query time for local memory search",
+    )
+    local_memory_candidate_multiplier: int = Field(
+        default=5,
+        alias="LOCAL_MEMORY_CANDIDATE_MULTIPLIER",
+        description="Retrieve this multiple of requested K before reranking/diversification",
+    )
+    local_memory_vector_weight: float = Field(
+        default=0.62,
+        alias="LOCAL_MEMORY_VECTOR_WEIGHT",
+        description="Weight of dense vector similarity in hybrid memory scoring",
+    )
+    local_memory_lexical_weight: float = Field(
+        default=0.18,
+        alias="LOCAL_MEMORY_LEXICAL_WEIGHT",
+        description="Weight of lexical overlap in hybrid memory scoring",
+    )
+    local_memory_recency_weight: float = Field(
+        default=0.10,
+        alias="LOCAL_MEMORY_RECENCY_WEIGHT",
+        description="Weight of temporal recency in hybrid memory scoring",
+    )
+    local_memory_confidence_weight: float = Field(
+        default=0.10,
+        alias="LOCAL_MEMORY_CONFIDENCE_WEIGHT",
+        description="Weight of extraction confidence in hybrid memory scoring",
+    )
+    local_memory_recency_half_life_days: float = Field(
+        default=45.0,
+        alias="LOCAL_MEMORY_RECENCY_HALF_LIFE_DAYS",
+        description="Half-life for recency decay in days (larger = slower decay)",
+    )
+    local_memory_mmr_enabled: bool = Field(
+        default=True,
+        alias="LOCAL_MEMORY_MMR_ENABLED",
+        description="Enable MMR diversification over top memory search candidates",
+    )
+    local_memory_mmr_lambda: float = Field(
+        default=0.72,
+        alias="LOCAL_MEMORY_MMR_LAMBDA",
+        description="MMR lambda: 1.0=max relevance, 0.0=max diversity",
+    )
+    local_memory_scroll_page_size: int = Field(
+        default=128,
+        alias="LOCAL_MEMORY_SCROLL_PAGE_SIZE",
+        description="Page size used when scrolling all memories from Qdrant",
     )
 
     # --- Learning Loop ---

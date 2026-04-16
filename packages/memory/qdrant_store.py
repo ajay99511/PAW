@@ -39,14 +39,23 @@ COLLECTION = settings.qdrant_collection
 _client: QdrantClient | None = None
 
 
+def _qdrant_client_kwargs() -> dict[str, Any]:
+    kwargs: dict[str, Any] = {}
+    if (settings.qdrant_url or "").strip():
+        kwargs["url"] = settings.qdrant_url.strip()
+    else:
+        kwargs["host"] = settings.qdrant_host
+        kwargs["port"] = settings.qdrant_port
+    if (settings.qdrant_api_key or "").strip():
+        kwargs["api_key"] = settings.qdrant_api_key.strip()
+    return kwargs
+
+
 def _get_client() -> QdrantClient:
     """Get or create the Qdrant client singleton."""
     global _client
     if _client is None:
-        _client = QdrantClient(
-            host=settings.qdrant_host,
-            port=settings.qdrant_port,
-        )
+        _client = QdrantClient(**_qdrant_client_kwargs())
     return _client
 
 

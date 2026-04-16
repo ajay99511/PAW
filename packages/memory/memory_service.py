@@ -1,14 +1,14 @@
 """
 Memory Service - 5-Layer Memory System Integration
 
-Sits on top of both qdrant_store (document RAG) and mem0_client
-(user-centric intelligent memory) to provide:
+Sits on top of qdrant_store (document RAG) and the local memory extractor
+(user-centric long-term memory) to provide:
   - store_memory()              -> embed + persist to Qdrant
   - query_memories()            -> semantic search over Qdrant
-  - build_context()             -> HYBRID assembly (Mem0 facts + 5-Layer context)
-  - extract_and_store_from_turn -> auto-learn from conversation via Mem0
-  - get_all_user_memories()     -> transparent view into Mem0 memories
-  - forget_memory()             -> delete a specific Mem0 memory
+  - build_context()             -> HYBRID assembly (local facts + 5-Layer context)
+  - extract_and_store_from_turn -> auto-learn from conversation via local memory extraction
+  - get_all_user_memories()     -> transparent view into stored memories
+  - forget_memory()             -> delete a specific memory
   - compact_session_if_needed() -> Layer 4 compaction trigger
 
 5-Layer Memory Architecture:
@@ -16,12 +16,12 @@ Sits on top of both qdrant_store (document RAG) and mem0_client
   Layer 2: JSONL Transcripts (append-only session history)
   Layer 3: Session Pruning (in-memory, TTL-aware)
   Layer 4: Compaction (adaptive summarization)
-  Layer 5: Long-Term Memory Search (Mem0 + Qdrant hybrid)
+  Layer 5: Long-Term Memory Search (local memory + Qdrant hybrid)
 
 Usage:
     from packages.memory.memory_service import build_context, compact_session_if_needed
     
-    # Build hybrid context (Mem0 + 5-Layer)
+    # Build hybrid context (local memory + 5-Layer)
     context = await build_context(user_message, user_id="default")
     
     # Check if compaction needed
@@ -164,7 +164,7 @@ async def extract_and_store_from_turn(
     user_id: str = "default",
 ) -> dict[str, Any]:
     """
-    Auto-extract facts from a conversation turn via Mem0.
+    Auto-extract facts from a conversation turn via local memory extraction.
     """
     try:
         from packages.memory.mem0_client import mem0_add
@@ -177,7 +177,7 @@ async def extract_and_store_from_turn(
         )
         return result if isinstance(result, dict) else {"result": result}
     except Exception as exc:
-        logger.warning("Mem0 extraction failed (non-fatal): %s", exc)
+        logger.warning("Local memory extraction failed (non-fatal): %s", exc)
         return {"error": str(exc), "extracted": 0}
 
 
@@ -185,20 +185,20 @@ async def get_all_user_memories(
     user_id: str = "default",
 ) -> list[dict[str, Any]]:
     """
-    Get all Mem0 memories for a user (for transparency and debugging).
+    Get all stored memories for a user (for transparency and debugging).
     """
     try:
         from packages.memory.mem0_client import mem0_get_all
 
         return await asyncio.to_thread(mem0_get_all, user_id=user_id)
     except Exception as exc:
-        logger.warning("Could not retrieve Mem0 memories: %s", exc)
+        logger.warning("Could not retrieve stored memories: %s", exc)
         return []
 
 
 async def forget_memory(memory_id: str) -> dict[str, Any]:
     """
-    Delete a specific Mem0 memory by ID.
+    Delete a specific memory by ID.
     """
     try:
         from packages.memory.mem0_client import mem0_delete
@@ -219,7 +219,7 @@ async def build_context(
     Build a compact hybrid context string from:
     - Layer 1: Bootstrap files (AGENTS.md, SOUL.md, USER.md, etc.)
     - Layer 2-4: Recent session context (JSONL transcripts, pruned)
-    - Layer 5: Mem0 facts + Qdrant documents
+    - Layer 5: local facts + Qdrant documents
     
     Args:
         user_message: Current user message
@@ -249,18 +249,18 @@ async def build_context(
     except Exception as exc:
         logger.debug("Layer 1 (Bootstrap) unavailable: %s", exc)
     
-    # === LAYER 5A: Mem0 Facts (User-Centric Memory) ===
+    # === LAYER 5A: Local Facts (User-Centric Memory) ===
     try:
         from packages.memory.mem0_client import mem0_search
 
-        mem0_results = await asyncio.to_thread(
+        memory_results = await asyncio.to_thread(
             mem0_search,
             user_message,
             user_id=user_id,
             limit=min(k, settings.rag_memory_limit),
         )
         memory_lines = []
-        for i, mem in enumerate(mem0_results[: settings.rag_memory_limit], 1):
+        for i, mem in enumerate(memory_results[: settings.rag_memory_limit], 1):
             memory_text = mem.get("memory", mem.get("content", ""))
             # Redact secrets
             memory_text, _ = redact_text(memory_text)
@@ -273,9 +273,9 @@ async def build_context(
                 "## What I Know About You (Long-Term Facts)\n" + "\n".join(memory_lines),
                 total_budget,
             )
-            logger.debug("Layer 5A (Mem0): %d facts loaded", len(memory_lines))
+            logger.debug("Layer 5A (Local): %d facts loaded", len(memory_lines))
     except Exception as exc:
-        logger.debug("Layer 5A (Mem0) unavailable: %s", exc)
+        logger.debug("Layer 5A (Local) unavailable: %s", exc)
 
     # === LAYER 5B: Qdrant Documents (RAG) ===
     try:

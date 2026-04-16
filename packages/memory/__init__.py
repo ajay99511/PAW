@@ -1,1 +1,1 @@
-# Memory - Qdrant + Mem0 integration
+# Memory - Qdrant-first local memory integration
